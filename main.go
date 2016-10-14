@@ -21,7 +21,6 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	options.TempDir = os.TempDir()
 
 	c := &cli.CLI{
 		Options: options,
@@ -38,11 +37,11 @@ func main() {
 		log.Fatal(err)
 	}
 
-	if options.Backfill {
-		fmt.Println("Running in backfill mode - downloading old logs and consuming them")
-		err = c.Backfill()
+	if options.Download {
+		fmt.Println("Running in download mode - downloading old logs")
+		err = c.Download()
 	} else {
-		fmt.Println("Running in tail mode - streaming slow query logs from RDS")
+		fmt.Println("Running in tail mode - streaming logs from RDS")
 		err = c.Stream()
 	}
 	if err != nil {
@@ -55,10 +54,15 @@ func main() {
 func parseFlags() (*cli.Options, error) {
 	var options cli.Options
 	flagParser := flag.NewParser(&options, flag.Default)
+	flagParser.Usage = cli.Usage
 
 	// parse flags and check for extra command line args
 	if extraArgs, err := flagParser.Parse(); err != nil || len(extraArgs) != 0 {
-		fmt.Println("Failed to parse the command line.")
+		if err.(*flag.Error).Type == flag.ErrHelp {
+			// user specified --help
+			os.Exit(0)
+		}
+		fmt.Println("Failed to parse the command line. Run with --help for more info")
 		if err != nil {
 			return nil, err
 		}

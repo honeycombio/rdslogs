@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"path"
 	"strconv"
 	"strings"
@@ -17,26 +16,30 @@ import (
 // Options contains all the CLI flags
 type Options struct {
 	Region             string `long:"region" description:"AWS region to use" default:"us-east-1"`
-	InstanceIdentifier string `long:"identifier" description:"RDS instance identifier"`
-	LogFile            string `long:"log_file" description:"RDS log file to retrieve" default:"slowquery/mysql-slowquery.log"`
-	Backfill           bool   `long:"backfill" description:"Download old logs and read them all"`
-	ConfigFile         string `long:"config" description:"config file"`
-	Honeytail          string `long:"honeytail" description:"path to the honeytail binary" default:"honeytail"`
-	HoneytailConfig    string `long:"honeytail_config" description:"path to the honeytail config file" default:"./honeytail.conf"`
-	Debug              bool   `long:"debug" description:"turn on debugging output"`
+	InstanceIdentifier string `short:"i" long:"identifier" description:"RDS instance identifier"`
+	LogFile            string `short:"f" long:"log_file" description:"RDS log file to retrieve" default:"slowquery/mysql-slowquery.log"`
+	Download           bool   `short:"d" long:"download" description:"Download old logs instead of tailing the current log"`
+	DownloadDir        string `long:"download_dir" description:"directory in to which log files are downloaded" default:"./"`
 
-	// stored in the Options struct but not user adjustable
-	TempDir string `hidden:"true" description:"directory in to which log files are downloaded"`
+	Version    bool   `short:"v" long:"version" description:"Output the current version and exit"`
+	ConfigFile string `long:"config" description:"config file" no-ini:"true"`
+	Debug      bool   `long:"debug" description:"turn on debugging output"`
 }
+
+// Usage info for --help
+var Usage = `rdstail --identifier my-rds-instance
+
+rdstail streams a log file from Amazon RDS and prints it to STDOUT.
+
+In Download mode, instead of tailing, it downloads the log file specified by the
+--log_file flag and the past 24hrs of rotated logs to the directory specified by
+the --download_dir flag.`
 
 // CLI contains handles to the provided Options + aws.RDS struct
 type CLI struct {
 	Options *Options
 	RDS     *rds.RDS
 
-	// noDataCount keeps a counter of how many times we've gotten no data returned
-	// when we're trying to roll over to the next hour's logs
-	noDataCount int
 	// memoize the list of log files
 	cachedLogFiles []LogFile
 	// allow changing the time for tests
@@ -159,8 +162,8 @@ func (c *CLI) getRecentEntries(sPos StreamPos) (*rds.DownloadDBLogFilePortionOut
 	return c.RDS.DownloadDBLogFilePortion(params)
 }
 
-// Backfill downloads RDS logs and reads them all in
-func (c *CLI) Backfill() error {
+// Download downloads RDS logs and reads them all in
+func (c *CLI) Download() error {
 	// get a list of RDS instances, return the one to use.
 	// if one's user supplied, verify it exists.
 	// if not user supplied and there's only one, use that
@@ -176,41 +179,6 @@ func (c *CLI) Backfill() error {
 		return err
 	}
 
-	if err := runHoneytail(c.Options, logFiles); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func runHoneytail(options *Options, logFiles []LogFile) error {
-	if _, err := os.Stat(options.HoneytailConfig); os.IsNotExist(err) {
-		// i really dislike this: "what's a honeytail config file?" "what's valid mean?"
-		return fmt.Errorf(`Couldn't find honeytail config at "%s"
-
-Please make sure you have a recent version of honeytail (1.132+) and a valid
-honeytail config file. To generate a honeytail config file for use with this
-script, run the mysql_installer script or run the following with your correct
-Write Key filled in:
-
-	honeytail -p mysql -k YOUR_WRITE_KEY -d mysqlhoneytail --tail.read_from=beginning --tail.stop --backoff --write_current_config > ./honeytail.conf`,
-			options.HoneytailConfig)
-	}
-
-	for _, lf := range logFiles {
-		cmd := options.Honeytail
-		args := []string{"--config", options.HoneytailConfig, "--file", lf.Path}
-		c := exec.Command(cmd, args...)
-		fmt.Printf("Running honeytail on %s...\n", lf.Path)
-		if err := c.Run(); err != nil {
-			return fmt.Errorf(`Failed to execute honeytail (requires version 1.114+) on log files with the command:
-
-	%s %s
-
-`, cmd, strings.Join(args, " "))
-		}
-		os.Remove(lf.Path)
-	}
 	return nil
 }
 
@@ -232,7 +200,7 @@ func (l *LogFile) String() string {
 
 // DownloadLogFiles returns a new copy of the logFile list because it mutates the contents.
 func (c *CLI) DownloadLogFiles(logFiles []LogFile) ([]LogFile, error) {
-	fmt.Printf("Downloading log files to %s\n", c.Options.TempDir)
+	fmt.Printf("Downloading log files to %s\n", c.Options.DownloadDir)
 	downloadedLogFiles := make([]LogFile, 0, len(logFiles))
 	for i := range logFiles {
 		// returned logFile has a modified Path
@@ -250,7 +218,7 @@ func (c *CLI) DownloadLogFiles(logFiles []LogFile) ([]LogFile, error) {
 // paginate it ourselves.
 func (c *CLI) downloadFile(logFile LogFile) (LogFile, error) {
 	// open the out file for writing
-	logFile.Path = path.Join(c.Options.TempDir, logFile.LogFileName)
+	logFile.Path = path.Join(c.Options.DownloadDir, logFile.LogFileName)
 	if err := os.MkdirAll(path.Dir(logFile.Path), os.ModePerm); err != nil {
 		return logFile, err
 	}
