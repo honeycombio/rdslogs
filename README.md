@@ -25,8 +25,8 @@ Usage:
 rdstail streams a log file from Amazon RDS and prints it to STDOUT.
 
 In Download mode, instead of tailing, it downloads the log file specified by the
---log_file flag and the past 24hrs of rotated logs to the directory specified by
-the --download_dir flag.
+--log_file flag (and the past 24hrs of rotated logs) to the directory specified
+by the --download_dir flag.
 
 Application Options:
       --region=       AWS region to use (default: us-east-1)
