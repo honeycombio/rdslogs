@@ -8,7 +8,7 @@ The default action of `rdslogs` is to stream the current log file. Use the
 
 Supports piping to [Honeycomb](https://honeycomb.io):
 ```
-/honeyrds --identifier my-rds-database | honeytail -p mysql -k <writekey> -d rdstail -f -
+rdslogs --identifier my-rds-database | honeytail -p mysql -k <writekey> -d rdstail -f -
 ```
 
 # Installation
