@@ -42,16 +42,16 @@ func main() {
 	}
 
 	if options.Download {
-		fmt.Println("Running in download mode - downloading old logs")
+		fmt.Fprintln(os.Stderr, "Running in download mode - downloading old logs")
 		err = c.Download()
 	} else {
-		fmt.Println("Running in tail mode - streaming logs from RDS")
+		fmt.Fprintln(os.Stderr, "Running in tail mode - streaming logs from RDS")
 		err = c.Stream()
 	}
 	if err != nil {
 		log.Fatal(err)
 	}
-	fmt.Println("OK")
+	fmt.Fprintln(os.Stderr, "OK")
 }
 
 // getVersion returns the internal version ID
@@ -74,7 +74,7 @@ func parseFlags() (*cli.Options, error) {
 			// user specified --help
 			os.Exit(0)
 		}
-		fmt.Println("Failed to parse the command line. Run with --help for more info")
+		fmt.Fprintln(os.Stderr, "Failed to parse the command line. Run with --help for more info")
 		if err != nil {
 			return nil, err
 		}

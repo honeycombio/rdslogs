@@ -201,7 +201,7 @@ func (l *LogFile) String() string {
 
 // DownloadLogFiles returns a new copy of the logFile list because it mutates the contents.
 func (c *CLI) DownloadLogFiles(logFiles []LogFile) ([]LogFile, error) {
-	fmt.Printf("Downloading log files to %s\n", c.Options.DownloadDir)
+	fmt.Fprintf(os.Stderr, "Downloading log files to %s\n", c.Options.DownloadDir)
 	downloadedLogFiles := make([]LogFile, 0, len(logFiles))
 	for i := range logFiles {
 		// returned logFile has a modified Path
