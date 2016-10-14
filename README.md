@@ -6,7 +6,7 @@
 The default action of `rdslogs` is to stream the current log file. Use the
 `--download` flag to download log files instead.
 
-Supports piping to (Honeycomb)[https://honeycomb.io]:
+Supports piping to [Honeycomb](https://honeycomb.io):
 ```
 /honeyrds --identifier my-rds-database | honeytail -p mysql -k <writekey> -d rdstail -f -
 ```
