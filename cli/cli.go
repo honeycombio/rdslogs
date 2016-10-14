@@ -68,7 +68,6 @@ func (c *CLI) Stream() error {
 		if err != nil {
 			return err
 		}
-		// send them to honeytail
 		if resp.LogFileData != nil {
 			io.WriteString(os.Stdout, *resp.LogFileData)
 		}
