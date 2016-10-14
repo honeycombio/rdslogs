@@ -1,0 +1,22 @@
+os:
+  - linux
+  - osx
+
+language: go
+
+addons:
+    artifacts:
+        debug: true
+        paths:
+        - $GOPATH/bin
+
+dist: trusty
+
+go:
+    - 1.6
+
+script: go test github.com/honeycombio/rdslogs/...
+
+after_success:
+    - rm $GOPATH/bin/rdslogs
+    - go install -ldflags "-X main.BuildID=1.${TRAVIS_BUILD_NUMBER}" github.com/honeycombio/rdslogs/...
