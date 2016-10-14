@@ -33,10 +33,11 @@ func main() {
 	}
 
 	// make sure we can talk to an RDS instance.
-	if err := c.ValidateRDSInstance(); err != nil {
-		if err == credentials.ErrNoValidProvidersFoundInChain {
-			log.Fatal(awsCredsFailureMsg())
-		}
+	err := c.ValidateRDSInstance()
+	if err == credentials.ErrNoValidProvidersFoundInChain {
+		log.Fatal(awsCredsFailureMsg())
+	}
+	if err != nil {
 		log.Fatal(err)
 	}
 

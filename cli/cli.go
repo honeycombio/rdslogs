@@ -31,9 +31,11 @@ var Usage = `rdstail --identifier my-rds-instance
 
 rdstail streams a log file from Amazon RDS and prints it to STDOUT.
 
-In Download mode, instead of tailing, it downloads the log file specified by the
---log_file flag and the past 24hrs of rotated logs to the directory specified by
-the --download_dir flag.`
+Passing --download triggers Download Mode, in which rdslogs will download the
+specified logs to the directory specified by --download_dir. Logs are specified
+via the --log_file flag, which names an active log file as well as the past 24
+hours of rotated logs. (For example, specifying --log_file=foo.log will download
+foo.log as well as foo.log.0, foo.log.2, ... foo.log.23.)`
 
 // CLI contains handles to the provided Options + aws.RDS struct
 type CLI struct {
@@ -213,7 +215,7 @@ func (c *CLI) DownloadLogFiles(logFiles []LogFile) ([]LogFile, error) {
 }
 
 // downloadFile fetches an individual log file. Note that AWS's RDS
-// DownlaodDBLogFilePortion only returns 1MB at a time, and we have to manually
+// DownloadDBLogFilePortion only returns 1MB at a time, and we have to manually
 // paginate it ourselves.
 func (c *CLI) downloadFile(logFile LogFile) (LogFile, error) {
 	// open the out file for writing
@@ -279,7 +281,7 @@ func (c *CLI) GetLogFiles() ([]LogFile, error) {
 		}
 	}
 	// matchingLogFiles now contains a list of eligible log files,
-	// eg slow.log, slo.log.1, slow.log.2, etc.
+	// eg slow.log, slow.log.1, slow.log.2, etc.
 
 	return matchingLogFiles, nil
 }
