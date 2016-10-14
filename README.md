@@ -20,9 +20,9 @@ go get github.com/honeycombio/rdslogs
 # Usage
 ```
 Usage:
-  honeyrds rdstail --identifier my-rds-instance
+  rdslogs --identifier my-rds-instance
 
-rdstail streams a log file from Amazon RDS and prints it to STDOUT.
+rdslogs streams a log file from Amazon RDS and prints it to STDOUT.
 
 In Download mode, instead of tailing, it downloads the log file specified by the
 --log_file flag (and the past 24hrs of rotated logs) to the directory specified
