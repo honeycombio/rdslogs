@@ -218,7 +218,9 @@ func (c *CLI) DownloadLogFiles(logFiles []LogFile) ([]LogFile, error) {
 // paginate it ourselves.
 func (c *CLI) downloadFile(logFile LogFile) (LogFile, error) {
 	// open the out file for writing
-	logFile.Path = path.Join(c.Options.DownloadDir, logFile.LogFileName)
+	logFile.Path = path.Join(c.Options.DownloadDir, path.Base(logFile.LogFileName))
+	fmt.Printf("Downloading %s to %s ... ", logFile.LogFileName, logFile.Path)
+	defer fmt.Printf("done\n")
 	if err := os.MkdirAll(path.Dir(logFile.Path), os.ModePerm); err != nil {
 		return logFile, err
 	}
