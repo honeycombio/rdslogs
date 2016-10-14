@@ -16,6 +16,9 @@ import (
 	"github.com/honeycombio/honeyrds/cli"
 )
 
+// BuildID is set by Travis CI
+var BuildID string
+
 func main() {
 	options, err := parseFlags()
 	if err != nil {
@@ -50,6 +53,14 @@ func main() {
 	fmt.Println("OK")
 }
 
+// getVersion returns the internal version ID
+func getVersion() string {
+	if BuildID == "" {
+		return "dev"
+	}
+	return fmt.Sprintf("%s", BuildID)
+}
+
 // parse all the flags, exit if anything's amiss
 func parseFlags() (*cli.Options, error) {
 	var options cli.Options
@@ -67,6 +78,11 @@ func parseFlags() (*cli.Options, error) {
 			return nil, err
 		}
 		return nil, fmt.Errorf("Unexpected extra arguments: %s\n", strings.Join(extraArgs, " "))
+	}
+	// spit out the version if asked
+	if options.Version {
+		fmt.Println("Version:", getVersion())
+		os.Exit(0)
 	}
 	// read the config file if specified
 	if options.ConfigFile != "" {
