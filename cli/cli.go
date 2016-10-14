@@ -27,9 +27,9 @@ type Options struct {
 }
 
 // Usage info for --help
-var Usage = `rdstail --identifier my-rds-instance
+var Usage = `rdslogs --identifier my-rds-instance
 
-rdstail streams a log file from Amazon RDS and prints it to STDOUT.
+rdslogs streams a log file from Amazon RDS and prints it to STDOUT.
 
 Passing --download triggers Download Mode, in which rdslogs will download the
 specified logs to the directory specified by --download_dir. Logs are specified

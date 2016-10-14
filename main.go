@@ -13,7 +13,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/rds"
 	flag "github.com/jessevdk/go-flags"
 
-	"github.com/honeycombio/honeyrds/cli"
+	"github.com/honeycombio/rdslogs/cli"
 )
 
 // BuildID is set by Travis CI
@@ -33,7 +33,7 @@ func main() {
 	}
 
 	// make sure we can talk to an RDS instance.
-	err := c.ValidateRDSInstance()
+	err = c.ValidateRDSInstance()
 	if err == credentials.ErrNoValidProvidersFoundInChain {
 		log.Fatal(awsCredsFailureMsg())
 	}
