@@ -11,6 +11,12 @@ Supports piping to (Honeycomb)[https://honeycomb.io]:
 /honeyrds --identifier my-rds-database | honeytail -p mysql -k <writekey> -d rdstail -f -
 ```
 
+# Installation
+
+```
+go get github.com/honeycombio/rdslogs
+```
+
 # Usage
 ```
 Usage:
