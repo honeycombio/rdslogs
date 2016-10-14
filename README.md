@@ -1,5 +1,5 @@
 # RDSLogs
-[![Build Status](https://travis-ci.org/honeycombio/honeytail.svg?branch=master)](https://travis-ci.org/honeycombio/honeytail)
+[![Build Status](https://travis-ci.org/honeycombio/rdslogs.svg?branch=master)](https://travis-ci.org/honeycombio/rdslogs)
 
 `rdslogs` is a tool to download or stream log files from RDS.
 
