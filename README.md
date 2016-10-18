@@ -6,7 +6,7 @@
 The default action of `rdslogs` is to stream the current log file. Use the
 `--download` flag to download log files instead.
 
-Supports piping to [Honeycomb](https://honeycomb.io):
+Outputs to STDOUT for easy piping to [Honeycomb](https://honeycomb.io) or any other CLI:
 ```
 rdslogs --identifier my-rds-database | honeytail -p mysql -k <writekey> -d "RDS Logs" -f -
 ```
@@ -23,6 +23,10 @@ Usage:
   rdslogs --identifier my-rds-instance
 
 rdslogs streams a log file from Amazon RDS and prints it to STDOUT.
+
+AWS credentials are required and can be provided via IAM roles, AWS shared
+config (~/.aws/config), AWS shared credentials (~/.aws/credentials), or
+the environment variables AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY.
 
 In Download mode, instead of tailing, it downloads the log file specified by the
 --log_file flag (and the past 24hrs of rotated logs) to the directory specified
