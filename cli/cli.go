@@ -97,6 +97,14 @@ func (c *CLI) Stream() error {
 // getNextMarker takes in to account the current and next reported markers and
 // decides whether to believe the resp.Marker or calculate its own next marker.
 func (c *CLI) getNextMarker(sPos StreamPos, resp *rds.DownloadDBLogFilePortionOutput) *string {
+	// if resp is nil, we're up a creek and should return sPos' marker, but at
+	// least we shouldn't try and dereference it and panic.
+	if resp == nil {
+		return sPos.marker
+	}
+	if resp.Marker == nil {
+		return sPos.marker
+	}
 	// when we get to the end of a log segment, the marker in resp is "0".
 	// if it's not "0", we should trust it's correct and use it.
 	if *resp.Marker != "0" {
