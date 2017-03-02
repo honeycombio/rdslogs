@@ -32,6 +32,22 @@ func main() {
 		}),
 	}
 
+	// if sending output to Honeycomb, make sure we have a write key and dataset
+	if options.Output == "honeycomb" {
+		if options.WriteKey == "" || options.Dataset == "" {
+			log.Fatal("writekey and dataset flags required when output is 'honeycomb'.\nuse --help for usage info.")
+		}
+		if options.SampleRate < 1 {
+			log.Fatal("Sample rate must be a positive integer.\nuse --help for usage info.")
+		}
+		fmt.Fprintln(os.Stderr, "Sending output to Honeycomb")
+	} else if options.Output == "stdout" {
+		fmt.Fprintln(os.Stderr, "Sending output to STDOUT")
+	} else {
+		// output flag is neither stdout nor honeycomb.  error and bail
+		log.Fatal("output target not recognized. use --help for usage info")
+	}
+
 	// make sure we can talk to an RDS instance.
 	err = c.ValidateRDSInstance()
 	if err == credentials.ErrNoValidProvidersFoundInChain {
