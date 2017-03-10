@@ -165,6 +165,7 @@ func (c *CLI) getRecentEntries(sPos StreamPos) (*rds.DownloadDBLogFilePortionOut
 	params := &rds.DownloadDBLogFilePortionInput{
 		DBInstanceIdentifier: aws.String(c.Options.InstanceIdentifier),
 		LogFileName:          aws.String(sPos.logFile.LogFileName),
+		NumberOfLines:        aws.Int64(1000),
 	}
 	// if we have a marker, download from there. otherwise get the most recent line
 	if sPos.marker != nil {
