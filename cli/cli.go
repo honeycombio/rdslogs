@@ -101,6 +101,16 @@ func (c *CLI) Stream() error {
 		// get recent log entries
 		resp, err := c.getRecentEntries(sPos)
 		if err != nil {
+			if strings.HasPrefix(err.Error(), "InvalidParameterValue: This file contains binary data") {
+				io.WriteString(os.Stderr, fmt.Sprintf("binary data at marker %s, skipping 1000 in marker position\n", *sPos.marker))
+				// skip over inaccessible data
+				newMarker, err := sPos.Add(1000)
+				if err != nil {
+					return err
+				}
+				sPos.marker = &newMarker
+				continue
+			}
 			return err
 		}
 		if resp.LogFileData != nil {
