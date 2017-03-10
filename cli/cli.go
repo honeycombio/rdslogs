@@ -11,6 +11,7 @@ import (
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/rds"
+	"github.com/honeycombio/rdslogs/publisher"
 )
 
 // Options contains all the CLI flags
@@ -20,6 +21,13 @@ type Options struct {
 	LogFile            string `short:"f" long:"log_file" description:"RDS log file to retrieve" default:"slowquery/mysql-slowquery.log"`
 	Download           bool   `short:"d" long:"download" description:"Download old logs instead of tailing the current log"`
 	DownloadDir        string `long:"download_dir" description:"directory in to which log files are downloaded" default:"./"`
+	NumLines           int64  `long:"num_lines" description:"number of lines to request at a time from AWS. Larger number will be more efficient, smaller number will allow for longer lines" default:"1000"`
+	Output             string `short:"o" long:"output" description:"output for the logs: stdout or honeycomb" default:"stdout"`
+	WriteKey           string `long:"writekey" description:"Team write key, when output is honeycomb"`
+	Dataset            string `long:"dataset" description:"Name of the dataset, when output is honeycomb"`
+	APIHost            string `long:"api_host" description:"Hostname for the Honeycomb API server" default:"https://api.honeycomb.io/"`
+	ScrubQuery         bool   `long:"scrub_query" description:"Replaces the query field with a one-way hash of the contents"`
+	SampleRate         int    `long:"sample_rate" description:"Only send 1 / N log lines" default:"1"`
 
 	Version    bool   `short:"v" long:"version" description:"Output the current version and exit"`
 	ConfigFile string `long:"config" description:"config file" no-ini:"true"`
@@ -29,7 +37,8 @@ type Options struct {
 // Usage info for --help
 var Usage = `rdslogs --identifier my-rds-instance
 
-rdslogs streams a log file from Amazon RDS and prints it to STDOUT.
+rdslogs streams a log file from Amazon RDS and prints it to STDOUT or sends it
+up to Honeycomb.io.
 
 AWS credentials are required and can be provided via IAM roles, AWS shared
 config (~/.aws/config), AWS shared credentials (~/.aws/credentials), or
@@ -39,13 +48,21 @@ Passing --download triggers Download Mode, in which rdslogs will download the
 specified logs to the directory specified by --download_dir. Logs are specified
 via the --log_file flag, which names an active log file as well as the past 24
 hours of rotated logs. (For example, specifying --log_file=foo.log will download
-foo.log as well as foo.log.0, foo.log.2, ... foo.log.23.)`
+foo.log as well as foo.log.0, foo.log.2, ... foo.log.23.)
+
+When --output is set to "honeycomb", the --writekey and --dataset flags are
+required. Instead of being printed to STDOUT, database events from the log will
+be transmitted to Honeycomb. --scrub_query and --sample_rate also only apply to
+honeycomb output.
+`
 
 // CLI contains handles to the provided Options + aws.RDS struct
 type CLI struct {
 	Options *Options
 	RDS     *rds.RDS
 
+	// target to which to send output
+	output publisher.Publisher
 	// memoize the list of log files
 	cachedLogFiles []LogFile
 	// allow changing the time for tests
@@ -63,6 +80,18 @@ func (c *CLI) Stream() error {
 	if err = validateLogFileMatch(logFiles, c.Options.LogFile); err != nil {
 		return err
 	}
+	// create the chosen output publisher target
+	if c.Options.Output == "stdout" {
+		c.output = &publisher.STDOUTPublisher{}
+	} else {
+		c.output = &publisher.HoneycombPublisher{
+			Writekey:   c.Options.WriteKey,
+			Dataset:    c.Options.Dataset,
+			APIHost:    c.Options.APIHost,
+			ScrubQuery: c.Options.ScrubQuery,
+			SampleRate: c.Options.SampleRate,
+		}
+	}
 
 	// forever, download the most recent entries
 	sPos := StreamPos{
@@ -72,10 +101,20 @@ func (c *CLI) Stream() error {
 		// get recent log entries
 		resp, err := c.getRecentEntries(sPos)
 		if err != nil {
+			if strings.HasPrefix(err.Error(), "InvalidParameterValue: This file contains binary data") {
+				io.WriteString(os.Stderr, fmt.Sprintf("binary data at marker %s, skipping 1000 in marker position\n", *sPos.marker))
+				// skip over inaccessible data
+				newMarker, err := sPos.Add(1000)
+				if err != nil {
+					return err
+				}
+				sPos.marker = &newMarker
+				continue
+			}
 			return err
 		}
 		if resp.LogFileData != nil {
-			io.WriteString(os.Stdout, *resp.LogFileData)
+			c.output.Write(*resp.LogFileData)
 		}
 		// if that's all we've got for now, wait 5 seconds then try again
 		if !*resp.AdditionalDataPending || *resp.Marker == "0" {
@@ -165,7 +204,7 @@ func (c *CLI) getRecentEntries(sPos StreamPos) (*rds.DownloadDBLogFilePortionOut
 	params := &rds.DownloadDBLogFilePortionInput{
 		DBInstanceIdentifier: aws.String(c.Options.InstanceIdentifier),
 		LogFileName:          aws.String(sPos.logFile.LogFileName),
-		NumberOfLines:        aws.Int64(1000),
+		NumberOfLines:        aws.Int64(c.Options.NumLines),
 	}
 	// if we have a marker, download from there. otherwise get the most recent line
 	if sPos.marker != nil {
