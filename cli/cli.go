@@ -22,6 +22,7 @@ type Options struct {
 	Download           bool   `short:"d" long:"download" description:"Download old logs instead of tailing the current log"`
 	DownloadDir        string `long:"download_dir" description:"directory in to which log files are downloaded" default:"./"`
 	NumLines           int64  `long:"num_lines" description:"number of lines to request at a time from AWS. Larger number will be more efficient, smaller number will allow for longer lines" default:"1000"`
+	BackoffTimer       int64  `long:"backoff_timer" description:"how many seconds to pause when rate limited by AWS." default:"5"`
 	Output             string `short:"o" long:"output" description:"output for the logs: stdout or honeycomb" default:"stdout"`
 	WriteKey           string `long:"writekey" description:"Team write key, when output is honeycomb"`
 	Dataset            string `long:"dataset" description:"Name of the dataset, when output is honeycomb"`
@@ -101,6 +102,11 @@ func (c *CLI) Stream() error {
 		// get recent log entries
 		resp, err := c.getRecentEntries(sPos)
 		if err != nil {
+			if strings.HasPrefix(err.Error(), "Throttling: Rate exceeded") {
+				io.WriteString(os.Stderr, fmt.Sprintf("AWS Rate limit hit; sleeping for %d seconds.\n", c.Options.BackoffTimer))
+				time.Sleep(time.Duration(c.Options.BackoffTimer) * time.Second)
+				continue
+			}
 			if strings.HasPrefix(err.Error(), "InvalidParameterValue: This file contains binary data") {
 				io.WriteString(os.Stderr, fmt.Sprintf("binary data at marker %s, skipping 1000 in marker position\n", *sPos.marker))
 				// skip over inaccessible data
