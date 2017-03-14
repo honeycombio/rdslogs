@@ -13,6 +13,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/rds"
 	flag "github.com/jessevdk/go-flags"
 
+	"github.com/honeycombio/libhoney-go"
 	"github.com/honeycombio/rdslogs/cli"
 )
 
@@ -40,6 +41,7 @@ func main() {
 		if options.SampleRate < 1 {
 			log.Fatal("Sample rate must be a positive integer.\nuse --help for usage info.")
 		}
+		libhoney.UserAgentAddition = fmt.Sprintf("rdslogs/%s", BuildID)
 		fmt.Fprintln(os.Stderr, "Sending output to Honeycomb")
 	} else if options.Output == "stdout" {
 		fmt.Fprintln(os.Stderr, "Sending output to STDOUT")
