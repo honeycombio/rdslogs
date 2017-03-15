@@ -2,10 +2,14 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"os/exec"
+	"os/signal"
 	"strings"
+	"syscall"
+	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
@@ -26,11 +30,28 @@ func main() {
 		log.Fatal(err)
 	}
 
+	sigs := make(chan os.Signal, 1)
+	abort := make(chan bool, 1)
+	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
+	go func() {
+		sig := <-sigs
+		io.WriteString(os.Stderr, fmt.Sprintf("Aborting! Caught signal \"%s\"\n", sig))
+		io.WriteString(os.Stderr, "Cleaning up...\n")
+		abort <- true
+		go func() {
+			// don't wait forever to clean up. if we're really stuck, just die.
+			time.Sleep(10 * time.Second)
+			io.WriteString(os.Stderr, "Taking too long to clean up. I die, I die.\n")
+			os.Exit(1)
+		}()
+	}()
+
 	c := &cli.CLI{
 		Options: options,
 		RDS: rds.New(session.New(), &aws.Config{
 			Region: aws.String(options.Region),
 		}),
+		Abort: abort,
 	}
 
 	// if sending output to Honeycomb, make sure we have a write key and dataset
