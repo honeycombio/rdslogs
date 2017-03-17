@@ -4,7 +4,6 @@ import (
 	"crypto/sha256"
 	"fmt"
 	"io"
-	"math/rand"
 	"os"
 	"strings"
 
@@ -44,7 +43,9 @@ func (h *HoneycombPublisher) Write(chunk string) {
 			APIHost:    h.APIHost,
 			SampleRate: uint(h.SampleRate),
 		})
-		h.mysqlParser = &mysql.Parser{}
+		h.mysqlParser = &mysql.Parser{
+			SampleRate: h.SampleRate,
+		}
 		h.mysqlParser.Init(&mysql.Options{})
 		h.lines = make(chan string)
 		h.eventsToSend = make(chan event.Event)
@@ -55,13 +56,6 @@ func (h *HoneycombPublisher) Write(chunk string) {
 		go func() {
 			fmt.Fprintln(os.Stderr, "spinning up goroutine to send events")
 			for ev := range h.eventsToSend {
-				if h.SampleRate != 1 {
-					if rand.Intn(h.SampleRate) != 0 {
-						// drop this event
-						continue
-					}
-				}
-
 				if h.ScrubQuery {
 					if val, ok := ev.Data["query"]; ok {
 						// generate a sha256 hash
@@ -78,6 +72,7 @@ func (h *HoneycombPublisher) Write(chunk string) {
 						"error": err,
 					}).Error("Unexpected error adding data to libhoney event")
 				}
+				// sampling is handled by the mysql parser
 				if err := libhEv.SendPresampled(); err != nil {
 					logrus.WithFields(logrus.Fields{
 						"event": ev,
