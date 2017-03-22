@@ -1,0 +1,12 @@
+# Upstart job for rdslogs, the TCP traffic analyzer for Honeycomb
+# https://honeycomb.io/
+
+description     "rdslogs Daemon"
+author          "Honeycomb Team <support@honeycomb.io>"
+
+start on runlevel [2345]
+stop on runlevel [!2345]
+
+respawn
+
+exec su -s /bin/sh -c 'exec "$0" "$@"' honeycomb -- /usr/bin/rdslogs -c /etc/rdslogs/rdslogs.conf

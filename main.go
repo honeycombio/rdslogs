@@ -98,6 +98,14 @@ func parseFlags() (*cli.Options, error) {
 		}
 		return nil, fmt.Errorf("Unexpected extra arguments: %s\n", strings.Join(extraArgs, " "))
 	}
+
+	// if all we want is the config file, just write it in and exit
+	if options.WriteDefaultConfig {
+		ip := flag.NewIniParser(flagParser)
+		ip.Write(os.Stdout, flag.IniIncludeDefaults|flag.IniCommentDefaults|flag.IniIncludeComments)
+		os.Exit(0)
+	}
+
 	// spit out the version if asked
 	if options.Version {
 		fmt.Println("Version:", getVersion())

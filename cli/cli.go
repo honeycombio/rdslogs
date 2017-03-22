@@ -30,9 +30,10 @@ type Options struct {
 	ScrubQuery         bool   `long:"scrub_query" description:"Replaces the query field with a one-way hash of the contents"`
 	SampleRate         int    `long:"sample_rate" description:"Only send 1 / N log lines" default:"1"`
 
-	Version    bool   `short:"v" long:"version" description:"Output the current version and exit"`
-	ConfigFile string `long:"config" description:"config file" no-ini:"true"`
-	Debug      bool   `long:"debug" description:"turn on debugging output"`
+	Version            bool   `short:"v" long:"version" description:"Output the current version and exit"`
+	ConfigFile         string `long:"config" description:"config file" no-ini:"true"`
+	WriteDefaultConfig bool   `long:"write_default_config" description:"Write a default config file to STDOUT" no-ini:"true"`
+	Debug              bool   `long:"debug" description:"turn on debugging output"`
 }
 
 // Usage info for --help

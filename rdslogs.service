@@ -1,0 +1,13 @@
+[Unit]
+Description=Honeycomb agent to consume RDS slow query log
+After=network.target
+
+[Service]
+ExecStart=/usr/bin/rdslogs -c /etc/rdslogs/rdslogs.conf
+KillMode=process
+Restart=on-failure
+User=honeycomb
+Group=honeycomb
+
+[Install]
+Alias=rdslogs rdslogs.service
