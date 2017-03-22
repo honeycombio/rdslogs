@@ -16,7 +16,8 @@ import (
 // Publisher is an interface to write rdslogs entries to a target. Current
 // implementations are STDOUT and Honeycomb
 type Publisher interface {
-	Write(line string)
+	// Write accepts a long blob of text and writes it to the target
+	Write(blob string)
 }
 
 // HoneycombPublisher implements Publisher and sends the entries provided to
@@ -90,6 +91,11 @@ func (h *HoneycombPublisher) Write(chunk string) {
 		}
 		h.lines <- line
 	}
+}
+
+// Close flushes outstanding sends
+func (h *HoneycombPublisher) Close() {
+	libhoney.Close()
 }
 
 // STDOUTPublisher implements Publisher and sends the entries provided to

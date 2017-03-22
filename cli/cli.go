@@ -59,8 +59,12 @@ honeycomb output.
 
 // CLI contains handles to the provided Options + aws.RDS struct
 type CLI struct {
+	// Options is for command line options
 	Options *Options
-	RDS     *rds.RDS
+	// RDS is an initialized session connected to RDS
+	RDS *rds.RDS
+	// Abort carries a true message when we catch CTRL-C so we can clean up
+	Abort chan bool
 
 	// target to which to send output
 	output publisher.Publisher
@@ -85,13 +89,15 @@ func (c *CLI) Stream() error {
 	if c.Options.Output == "stdout" {
 		c.output = &publisher.STDOUTPublisher{}
 	} else {
-		c.output = &publisher.HoneycombPublisher{
+		pub := &publisher.HoneycombPublisher{
 			Writekey:   c.Options.WriteKey,
 			Dataset:    c.Options.Dataset,
 			APIHost:    c.Options.APIHost,
 			ScrubQuery: c.Options.ScrubQuery,
 			SampleRate: c.Options.SampleRate,
 		}
+		defer pub.Close()
+		c.output = pub
 	}
 
 	// forever, download the most recent entries
@@ -99,6 +105,13 @@ func (c *CLI) Stream() error {
 		logFile: LogFile{LogFileName: c.Options.LogFile},
 	}
 	for {
+		// check for signal triggered exit
+		select {
+		case <-c.Abort:
+			return fmt.Errorf("signal triggered exit")
+		default:
+		}
+
 		// get recent log entries
 		resp, err := c.getRecentEntries(sPos)
 		if err != nil {
@@ -298,6 +311,12 @@ func (c *CLI) downloadFile(logFile LogFile) (LogFile, error) {
 		LogFileName:          aws.String(logFile.LogFileName),
 	}
 	for aws.BoolValue(resp.AdditionalDataPending) {
+		// check for signal triggered exit
+		select {
+		case <-c.Abort:
+			return logFile, fmt.Errorf("signal triggered exit")
+		default:
+		}
 		params.Marker = resp.Marker // support pagination
 		resp, err = c.RDS.DownloadDBLogFilePortion(params)
 		if err != nil {

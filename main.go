@@ -5,7 +5,10 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"os/signal"
 	"strings"
+	"syscall"
+	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
@@ -26,11 +29,27 @@ func main() {
 		log.Fatal(err)
 	}
 
+	sigs := make(chan os.Signal, 1)
+	abort := make(chan bool, 0)
+	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
+	go func() {
+		sig := <-sigs
+		fmt.Fprintf(os.Stderr, "Aborting! Caught Signal \"%s\"\n", sig)
+		fmt.Fprintf(os.Stderr, "Cleaning up...\n")
+		select {
+		case abort <- true:
+		case <-time.After(10 * time.Second):
+			fmt.Fprintf(os.Stderr, "Taking too long... Aborting.\n")
+			os.Exit(1)
+		}
+	}()
+
 	c := &cli.CLI{
 		Options: options,
 		RDS: rds.New(session.New(), &aws.Config{
 			Region: aws.String(options.Region),
 		}),
+		Abort: abort,
 	}
 
 	// if sending output to Honeycomb, make sure we have a write key and dataset
