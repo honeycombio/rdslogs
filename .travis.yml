@@ -10,7 +10,7 @@ go:
 
 before_install:
   - sudo apt-get -qq update
-  - sudo apt-get install -y libpcap0.8-dev build-essential rpm
+  - sudo apt-get install -y build-essential rpm
   - gem install fpm
 
 script:
@@ -19,7 +19,7 @@ script:
 
 after_success:
   - rm $GOPATH/bin/rdslogs
-  - go install -ldflags "-X main.BuildID=1.${TRAVIS_BUILD_NUMBER} -extldflags \"-static\"" github.com/honeycombio/rdslogs/...
+  - go install -ldflags "-X main.BuildID=1.${TRAVIS_BUILD_NUMBER}" github.com/honeycombio/rdslogs/...
   - $GOPATH/bin/rdslogs --write_default_config > ./rdslogs.conf
   - ./build-pkg.sh -v "1.${TRAVIS_BUILD_NUMBER}" -t deb
   - ./build-pkg.sh -v "1.${TRAVIS_BUILD_NUMBER}" -t rpm

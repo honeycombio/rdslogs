@@ -1,4 +1,4 @@
-# Upstart job for rdslogs, the TCP traffic analyzer for Honeycomb
+# Upstart job for rdslogs, a tool for streaming the RDS slow query log
 # https://honeycomb.io/
 
 description     "rdslogs Daemon"
