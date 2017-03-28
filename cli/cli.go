@@ -31,7 +31,7 @@ type Options struct {
 	SampleRate         int    `long:"sample_rate" description:"Only send 1 / N log lines" default:"1"`
 
 	Version            bool   `short:"v" long:"version" description:"Output the current version and exit"`
-	ConfigFile         string `long:"config" description:"config file" no-ini:"true"`
+	ConfigFile         string `short:"c" long:"config" description:"config file" no-ini:"true"`
 	WriteDefaultConfig bool   `long:"write_default_config" description:"Write a default config file to STDOUT" no-ini:"true"`
 	Debug              bool   `long:"debug" description:"turn on debugging output"`
 }
