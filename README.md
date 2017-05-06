@@ -4,6 +4,8 @@
 `rdslogs` is a tool to download or stream log files from RDS. When streaming, you
 can choose to stream them to STDOUT or directly to Honeycomb.
 
+To learn more about using Honeycomb, see our [docs](https://honeycomb.io/docs) (and [RDS-specific docs](https://honeycomb.io/docs/connect/mysql/rds/)).
+
 The default action of `rdslogs` is to stream the current log file. Use the
 `--download` flag to download log files instead.
 
