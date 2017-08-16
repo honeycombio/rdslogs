@@ -387,22 +387,41 @@ func (c *CLI) getListRDSLogFiles() ([]LogFile, error) {
 		return c.cachedLogFiles, nil
 	}
 
-	output, err := c.RDS.DescribeDBLogFiles(&rds.DescribeDBLogFilesInput{
-		DBInstanceIdentifier: &c.Options.InstanceIdentifier,
-	})
-	if err != nil {
-		return nil, err
-	}
+	var output *rds.DescribeDBLogFilesOutput
+	var err error
+	var logFiles []LogFile
 
-	// assign go timestamp from msec epoch time, rebuild as a list
-	logFiles := make([]LogFile, 0, len(output.DescribeDBLogFiles))
-	for _, lf := range output.DescribeDBLogFiles {
-		logFiles = append(logFiles, LogFile{
-			LastWritten:     *lf.LastWritten,
-			LastWrittenTime: time.Unix(*lf.LastWritten/1000, 0),
-			LogFileName:     *lf.LogFileName,
-			Size:            *lf.Size,
-		})
+	for {
+		if output == nil {
+			output, err = c.RDS.DescribeDBLogFiles(&rds.DescribeDBLogFilesInput{
+				DBInstanceIdentifier: &c.Options.InstanceIdentifier,
+			})
+			logFiles = make([]LogFile, 0, len(output.DescribeDBLogFiles))
+			fmt.Print("Downloading.")
+		} else {
+			output, err = c.RDS.DescribeDBLogFiles(&rds.DescribeDBLogFilesInput{
+				DBInstanceIdentifier: &c.Options.InstanceIdentifier,
+				Marker: output.Marker,
+			})
+			fmt.Print(".")
+		}
+		if err != nil {
+			return nil, err
+		}
+
+		// assign go timestamp from msec epoch time, rebuild as a list
+		for _, lf := range output.DescribeDBLogFiles {
+			logFiles = append(logFiles, LogFile{
+				LastWritten:     *lf.LastWritten,
+				LastWrittenTime: time.Unix(*lf.LastWritten/1000, 0),
+				LogFileName:     *lf.LogFileName,
+				Size:            *lf.Size,
+			})
+		}
+		if output.Marker == nil {
+			fmt.Print("\n")
+			break
+		}
 	}
 
 	c.cachedLogFiles = logFiles
