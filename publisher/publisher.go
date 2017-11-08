@@ -9,7 +9,7 @@ import (
 
 	"github.com/Sirupsen/logrus"
 	"github.com/honeycombio/honeytail/event"
-	"github.com/honeycombio/honeytail/parsers/mysql"
+	"github.com/honeycombio/honeytail/parsers"
 	"github.com/honeycombio/libhoney-go"
 )
 
@@ -28,8 +28,8 @@ type HoneycombPublisher struct {
 	APIHost      string
 	ScrubQuery   bool
 	SampleRate   int
+	Parser       parsers.Parser
 	initialized  bool
-	mysqlParser  *mysql.Parser
 	lines        chan string
 	eventsToSend chan event.Event
 }
@@ -44,14 +44,10 @@ func (h *HoneycombPublisher) Write(chunk string) {
 			APIHost:    h.APIHost,
 			SampleRate: uint(h.SampleRate),
 		})
-		h.mysqlParser = &mysql.Parser{
-			SampleRate: h.SampleRate,
-		}
-		h.mysqlParser.Init(&mysql.Options{})
 		h.lines = make(chan string)
 		h.eventsToSend = make(chan event.Event)
 		go func() {
-			h.mysqlParser.ProcessLines(h.lines, h.eventsToSend, nil)
+			h.Parser.ProcessLines(h.lines, h.eventsToSend, nil)
 			close(h.eventsToSend)
 		}()
 		go func() {
@@ -74,6 +70,7 @@ func (h *HoneycombPublisher) Write(chunk string) {
 					}).Error("Unexpected error adding data to libhoney event")
 				}
 				// sampling is handled by the mysql parser
+				// TODO make this work for postgres too
 				if err := libhEv.SendPresampled(); err != nil {
 					logrus.WithFields(logrus.Fields{
 						"event": ev,
