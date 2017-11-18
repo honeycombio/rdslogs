@@ -26,6 +26,9 @@ import (
 // So we can hard-code this prefix format for Postgres log lines.
 const rdsPostgresLinePrefix = "%t:%r:%u@%d:[%p]:"
 
+const DBTypePostgreSQL = "postgresql"
+const DBTypeMySQL = "mysql"
+
 // Options contains all the CLI flags
 type Options struct {
 	Region             string `long:"region" description:"AWS region to use" default:"us-east-1"`
@@ -87,7 +90,7 @@ type CLI struct {
 }
 
 // Stream polls the RDS log endpoint forever to effectively tail the logs and
-// spits them out to STDOUT
+// spits them out to either stdout or to Honeycomb.
 func (c *CLI) Stream() error {
 	// make sure we have a valid log file from which to stream
 	latestFile, err := c.GetLatestLogFile()
@@ -99,10 +102,10 @@ func (c *CLI) Stream() error {
 		c.output = &publisher.STDOUTPublisher{}
 	} else {
 		var parser parsers.Parser
-		if c.Options.DBType == "mysql" {
+		if c.Options.DBType == DBTypeMySQL {
 			parser = &mysql.Parser{}
 			parser.Init(&mysql.Options{})
-		} else if c.Options.DBType == "postgresql" {
+		} else if c.Options.DBType == DBTypePostgreSQL {
 			parser = &postgresql.Parser{}
 			parser.Init(&postgresql.Options{LogLinePrefix: rdsPostgresLinePrefix})
 		} else {
@@ -156,32 +159,37 @@ func (c *CLI) Stream() error {
 		if resp.LogFileData != nil {
 			c.output.Write(*resp.LogFileData)
 		}
-		// if that's all we've got for now, wait 5 seconds then try again
 		if !*resp.AdditionalDataPending || *resp.Marker == "0" {
+
+			if c.Options.DBType == DBTypePostgreSQL {
+				// If that's all we've got for now, see if there's a newer file to
+				// start tailing. This logic is only relevant for postgres: the
+				// newest postgres log file will be named
+				// error/postgresql.log.YYYY-MM-DD,
+				// but the newest mysql log
+				// will always be named
+				// slowquery/mysql-slowquery.log.
+				newestFile, err := c.GetLatestLogFile()
+				if err != nil {
+					return err
+				}
+				if newestFile.LogFileName != sPos.logFile.LogFileName {
+					logrus.WithFields(logrus.Fields{
+						"oldFile": sPos.logFile.LogFileName,
+						"newFile": newestFile.LogFileName}).Debug("Found newer file")
+					sPos = StreamPos{logFile: LogFile{LogFileName: newestFile.LogFileName}}
+					continue
+				}
+			}
+			// Wait for a few seconds and try again.
 			c.waitFor(5 * time.Second)
 		}
-		oldMarker := sPos.marker
 		newMarker := c.getNextMarker(sPos, resp)
-		if newMarker == oldMarker {
-			newestFile, err := c.GetLatestLogFile()
-			if err != nil {
-				return err
-			}
-			if newestFile.LogFileName != sPos.logFile.LogFileName {
-				logrus.WithFields(logrus.Fields{
-					"prevMarker": oldMarker,
-					"newMarker":  newMarker,
-					"oldFile":    sPos.logFile.LogFileName,
-					"newFile":    newestFile.LogFileName}).Debug("Found newer file")
-				sPos = StreamPos{logFile: LogFile{LogFileName: newestFile.LogFileName}}
-			}
-		} else {
-			sPos.marker = newMarker
-			logrus.WithFields(logrus.Fields{
-				"prevMarker": oldMarker,
-				"newMarker":  newMarker,
-				"file":       sPos.logFile.LogFileName}).Debug("Got new marker")
-		}
+		logrus.WithFields(logrus.Fields{
+			"prevMarker": sPos.marker,
+			"newMarker":  newMarker,
+			"file":       sPos.logFile.LogFileName}).Debug("Got new marker")
+		sPos.marker = newMarker
 	}
 }
 
@@ -408,8 +416,7 @@ func (c *CLI) GetLatestLogFile() (LogFile, error) {
 	return logFiles[len(logFiles)-1], nil
 }
 
-// gets a list of all available RDS log files for an instance, sorted by
-// LastWritten timestamp
+// Gets a list of all available RDS log files for an instance.
 func (c *CLI) getListRDSLogFiles() ([]LogFile, error) {
 	var output *rds.DescribeDBLogFilesOutput
 	var err error
