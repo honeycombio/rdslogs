@@ -1,24 +1,40 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
 	"path"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/Sirupsen/logrus"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/rds"
+	"github.com/honeycombio/honeytail/parsers"
+	"github.com/honeycombio/honeytail/parsers/mysql"
+	"github.com/honeycombio/honeytail/parsers/postgresql"
 	"github.com/honeycombio/rdslogs/publisher"
 )
+
+// Fortunately for us, the RDS team has diligently ignored requests to make
+// RDS Postgres's `log_line_prefix` customizable for years
+// (https://forums.aws.amazon.com/thread.jspa?threadID=143460).
+// So we can hard-code this prefix format for Postgres log lines.
+const rdsPostgresLinePrefix = "%t:%r:%u@%d:[%p]:"
+
+const DBTypePostgreSQL = "postgresql"
+const DBTypeMySQL = "mysql"
 
 // Options contains all the CLI flags
 type Options struct {
 	Region             string `long:"region" description:"AWS region to use" default:"us-east-1"`
 	InstanceIdentifier string `short:"i" long:"identifier" description:"RDS instance identifier"`
-	LogFile            string `short:"f" long:"log_file" description:"RDS log file to retrieve" default:"slowquery/mysql-slowquery.log"`
+	DBType             string `long:"dbtype" description:"RDS database type. Accepted values are mysql and postgresql." default:"mysql"`
+	LogFile            string `short:"f" long:"log_file" description:"RDS log file to retrieve"`
 	Download           bool   `short:"d" long:"download" description:"Download old logs instead of tailing the current log"`
 	DownloadDir        string `long:"download_dir" description:"directory in to which log files are downloaded" default:"./"`
 	NumLines           int64  `long:"num_lines" description:"number of lines to request at a time from AWS. Larger number will be more efficient, smaller number will allow for longer lines" default:"10000"`
@@ -69,33 +85,40 @@ type CLI struct {
 
 	// target to which to send output
 	output publisher.Publisher
-	// memoize the list of log files
-	cachedLogFiles []LogFile
 	// allow changing the time for tests
 	fakeNower Nower
 }
 
 // Stream polls the RDS log endpoint forever to effectively tail the logs and
-// spits them out to STDOUT
+// spits them out to either stdout or to Honeycomb.
 func (c *CLI) Stream() error {
 	// make sure we have a valid log file from which to stream
-	logFiles, err := c.getListRDSLogFiles()
+	latestFile, err := c.GetLatestLogFile()
 	if err != nil {
-		return err
-	}
-	if err = validateLogFileMatch(logFiles, c.Options.LogFile); err != nil {
 		return err
 	}
 	// create the chosen output publisher target
 	if c.Options.Output == "stdout" {
 		c.output = &publisher.STDOUTPublisher{}
 	} else {
+		var parser parsers.Parser
+		if c.Options.DBType == DBTypeMySQL {
+			parser = &mysql.Parser{}
+			parser.Init(&mysql.Options{})
+		} else if c.Options.DBType == DBTypePostgreSQL {
+			parser = &postgresql.Parser{}
+			parser.Init(&postgresql.Options{LogLinePrefix: rdsPostgresLinePrefix})
+		} else {
+			return fmt.Errorf("Unknown dbtype value `%s`", c.Options.DBType)
+		}
+
 		pub := &publisher.HoneycombPublisher{
 			Writekey:   c.Options.WriteKey,
 			Dataset:    c.Options.Dataset,
 			APIHost:    c.Options.APIHost,
 			ScrubQuery: c.Options.ScrubQuery,
 			SampleRate: c.Options.SampleRate,
+			Parser:     parser,
 		}
 		defer pub.Close()
 		c.output = pub
@@ -103,7 +126,7 @@ func (c *CLI) Stream() error {
 
 	// forever, download the most recent entries
 	sPos := StreamPos{
-		logFile: LogFile{LogFileName: c.Options.LogFile},
+		logFile: LogFile{LogFileName: latestFile.LogFileName},
 	}
 	for {
 		// check for signal triggered exit
@@ -117,18 +140,18 @@ func (c *CLI) Stream() error {
 		resp, err := c.getRecentEntries(sPos)
 		if err != nil {
 			if strings.HasPrefix(err.Error(), "Throttling: Rate exceeded") {
-				io.WriteString(os.Stderr, fmt.Sprintf("AWS Rate limit hit; sleeping for %d seconds.\n", c.Options.BackoffTimer))
-				time.Sleep(time.Duration(c.Options.BackoffTimer) * time.Second)
+				logrus.Infof("AWS Rate limit hit; sleeping for %d seconds.\n", c.Options.BackoffTimer)
+				c.waitFor(time.Duration(c.Options.BackoffTimer) * time.Second)
 				continue
 			}
 			if strings.HasPrefix(err.Error(), "InvalidParameterValue: This file contains binary data") {
-				io.WriteString(os.Stderr, fmt.Sprintf("binary data at marker %s, skipping 1000 in marker position\n", *sPos.marker))
+				logrus.Infof("binary data at marker %s, skipping 1000 in marker position\n", sPos.marker)
 				// skip over inaccessible data
 				newMarker, err := sPos.Add(1000)
 				if err != nil {
 					return err
 				}
-				sPos.marker = &newMarker
+				sPos.marker = newMarker
 				continue
 			}
 			return err
@@ -136,26 +159,43 @@ func (c *CLI) Stream() error {
 		if resp.LogFileData != nil {
 			c.output.Write(*resp.LogFileData)
 		}
-		// if that's all we've got for now, wait 5 seconds then try again
 		if !*resp.AdditionalDataPending || *resp.Marker == "0" {
-			time.Sleep(5 * time.Second)
-		}
-		oldMarker := resp.Marker
-		sPos.marker = c.getNextMarker(sPos, resp)
-		if c.Options.Debug {
-			if oldMarker == nil {
-				s := "nil"
-				oldMarker = &s
+
+			if c.Options.DBType == DBTypePostgreSQL {
+				// If that's all we've got for now, see if there's a newer file to
+				// start tailing. This logic is only relevant for postgres: the
+				// newest postgres log file will be named
+				// error/postgresql.log.YYYY-MM-DD,
+				// but the newest mysql log
+				// will always be named
+				// slowquery/mysql-slowquery.log.
+				newestFile, err := c.GetLatestLogFile()
+				if err != nil {
+					return err
+				}
+				if newestFile.LogFileName != sPos.logFile.LogFileName {
+					logrus.WithFields(logrus.Fields{
+						"oldFile": sPos.logFile.LogFileName,
+						"newFile": newestFile.LogFileName}).Debug("Found newer file")
+					sPos = StreamPos{logFile: LogFile{LogFileName: newestFile.LogFileName}}
+					continue
+				}
 			}
-			io.WriteString(os.Stderr, fmt.Sprintf("%s got %s as next marker, using %s\n",
-				time.Now().Format("Jan 02 15:04"), *oldMarker, *sPos.marker))
+			// Wait for a few seconds and try again.
+			c.waitFor(5 * time.Second)
 		}
+		newMarker := c.getNextMarker(sPos, resp)
+		logrus.WithFields(logrus.Fields{
+			"prevMarker": sPos.marker,
+			"newMarker":  newMarker,
+			"file":       sPos.logFile.LogFileName}).Debug("Got new marker")
+		sPos.marker = newMarker
 	}
 }
 
 // getNextMarker takes in to account the current and next reported markers and
 // decides whether to believe the resp.Marker or calculate its own next marker.
-func (c *CLI) getNextMarker(sPos StreamPos, resp *rds.DownloadDBLogFilePortionOutput) *string {
+func (c *CLI) getNextMarker(sPos StreamPos, resp *rds.DownloadDBLogFilePortionOutput) string {
 	// if resp is nil, we're up a creek and should return sPos' marker, but at
 	// least we shouldn't try and dereference it and panic.
 	if resp == nil {
@@ -167,7 +207,7 @@ func (c *CLI) getNextMarker(sPos StreamPos, resp *rds.DownloadDBLogFilePortionOu
 	// when we get to the end of a log segment, the marker in resp is "0".
 	// if it's not "0", we should trust it's correct and use it.
 	if *resp.Marker != "0" {
-		return resp.Marker
+		return *resp.Marker
 	}
 	// ok, we've hit the end of a segment, but did we get any data? If we got
 	// data, then it's not really the end of the segment and we should calculate a
@@ -176,9 +216,9 @@ func (c *CLI) getNextMarker(sPos StreamPos, resp *rds.DownloadDBLogFilePortionOu
 		newMarkerStr, err := sPos.Add(len(*resp.LogFileData))
 		if err != nil {
 			fmt.Printf("failed to get next marker. Reverting to no marker. %s\n", err)
-			return nil
+			return "0"
 		}
-		return &newMarkerStr
+		return newMarkerStr
 	}
 	// we hit the end of a segment but we didn't get any data. we should try again
 	// during the 00-05 minutes past the hour time, and roll over once we get to 6
@@ -191,7 +231,7 @@ func (c *CLI) getNextMarker(sPos StreamPos, resp *rds.DownloadDBLogFilePortionOu
 	}
 	curMin, _ := strconv.Atoi(now.Format("04"))
 	if curMin > 5 {
-		return resp.Marker
+		return *resp.Marker
 	}
 	// let's try again from where we did the last time.
 	return sPos.marker
@@ -200,12 +240,12 @@ func (c *CLI) getNextMarker(sPos StreamPos, resp *rds.DownloadDBLogFilePortionOu
 // StreamPos represents a log file and marker combination
 type StreamPos struct {
 	logFile LogFile
-	marker  *string
+	marker  string
 }
 
 // Add returns a new marker string that is the current marker + dataLen offset
 func (s *StreamPos) Add(dataLen int) (string, error) {
-	splitMarker := strings.Split(*s.marker, ":")
+	splitMarker := strings.Split(s.marker, ":")
 	if len(splitMarker) != 2 {
 		// something's wrong. marker should have been #:#
 		// TODO provide a better value
@@ -227,8 +267,8 @@ func (c *CLI) getRecentEntries(sPos StreamPos) (*rds.DownloadDBLogFilePortionOut
 		NumberOfLines:        aws.Int64(c.Options.NumLines),
 	}
 	// if we have a marker, download from there. otherwise get the most recent line
-	if sPos.marker != nil {
-		params.Marker = sPos.marker
+	if sPos.marker != "" {
+		params.Marker = &sPos.marker
 	} else {
 		params.NumberOfLines = aws.Int64(1)
 	}
@@ -273,7 +313,7 @@ func (l *LogFile) String() string {
 
 // DownloadLogFiles returns a new copy of the logFile list because it mutates the contents.
 func (c *CLI) DownloadLogFiles(logFiles []LogFile) ([]LogFile, error) {
-	fmt.Fprintf(os.Stderr, "Downloading log files to %s\n", c.Options.DownloadDir)
+	logrus.Infof("Downloading log files to %s\n", c.Options.DownloadDir)
 	downloadedLogFiles := make([]LogFile, 0, len(logFiles))
 	for i := range logFiles {
 		// returned logFile has a modified Path
@@ -330,13 +370,6 @@ func (c *CLI) downloadFile(logFile LogFile) (LogFile, error) {
 	return logFile, nil
 }
 
-// Equal returns true if the timestamps and sizes are equal, even if the names
-// are not. As AWS rotates log files, it changes the names every hour.
-func (l *LogFile) Equal(candidate LogFile) bool {
-	return l.LastWritten == candidate.LastWritten &&
-		l.Size == candidate.Size
-}
-
 // GetLogFiles returns a list of all log files based on the Options.LogFile pattern
 func (c *CLI) GetLogFiles() ([]LogFile, error) {
 	// get a list of all log files.
@@ -347,46 +380,44 @@ func (c *CLI) GetLogFiles() ([]LogFile, error) {
 		return nil, err
 	}
 
-	if err = validateLogFileMatch(logFiles, c.Options.LogFile); err != nil {
-		return nil, err
-	}
-
 	var matchingLogFiles []LogFile
 	for _, lf := range logFiles {
-		if lf.LogFileName == c.Options.LogFile ||
-			strings.HasPrefix(lf.LogFileName, c.Options.LogFile) {
+		if strings.HasPrefix(lf.LogFileName, c.Options.LogFile) {
 			matchingLogFiles = append(matchingLogFiles, lf)
 		}
 	}
 	// matchingLogFiles now contains a list of eligible log files,
 	// eg slow.log, slow.log.1, slow.log.2, etc.
 
+	if len(matchingLogFiles) == 0 {
+		errParts := []string{"No log file with the given prefix found. Available log files:"}
+
+		for _, lf := range logFiles {
+			errParts = append(errParts, fmt.Sprint("\t", lf.String()))
+		}
+		return nil, fmt.Errorf(strings.Join(errParts, "\n"))
+
+	}
+
 	return matchingLogFiles, nil
 }
 
-func validateLogFileMatch(logFiles []LogFile, toMatch string) error {
-	for _, lf := range logFiles {
-		if lf.LogFileName == toMatch {
-			return nil
-		}
+func (c *CLI) GetLatestLogFile() (LogFile, error) {
+	logFiles, err := c.GetLogFiles()
+	if err != nil {
+		return LogFile{}, err
 	}
-	errParts := []string{"No log file with the given name found. Available log files:"}
 
-	// TODO sort log files by timestamp
-	for _, lf := range logFiles {
-		errParts = append(errParts, fmt.Sprint("\t", lf.String()))
+	if len(logFiles) == 0 {
+		return LogFile{}, errors.New("No log files found")
 	}
-	errParts = append(errParts, "Please specify one of these log files with the --log_file flag")
-	return fmt.Errorf(strings.Join(errParts, "\n"))
+
+	sort.SliceStable(logFiles, func(i, j int) bool { return logFiles[i].LastWritten < logFiles[j].LastWritten })
+	return logFiles[len(logFiles)-1], nil
 }
 
-// gets a list of all avaialable RDS log files for an instance
+// Gets a list of all available RDS log files for an instance.
 func (c *CLI) getListRDSLogFiles() ([]LogFile, error) {
-	if c.cachedLogFiles != nil {
-		// don't hit AWS twice for the same info
-		return c.cachedLogFiles, nil
-	}
-
 	var output *rds.DescribeDBLogFilesOutput
 	var err error
 	var logFiles []LogFile
@@ -397,13 +428,11 @@ func (c *CLI) getListRDSLogFiles() ([]LogFile, error) {
 				DBInstanceIdentifier: &c.Options.InstanceIdentifier,
 			})
 			logFiles = make([]LogFile, 0, len(output.DescribeDBLogFiles))
-			fmt.Print("Downloading.")
 		} else {
 			output, err = c.RDS.DescribeDBLogFiles(&rds.DescribeDBLogFilesInput{
 				DBInstanceIdentifier: &c.Options.InstanceIdentifier,
-				Marker: output.Marker,
+				Marker:               output.Marker,
 			})
-			fmt.Print(".")
 		}
 		if err != nil {
 			return nil, err
@@ -419,12 +448,10 @@ func (c *CLI) getListRDSLogFiles() ([]LogFile, error) {
 			})
 		}
 		if output.Marker == nil {
-			fmt.Print("\n")
 			break
 		}
 	}
 
-	c.cachedLogFiles = logFiles
 	return logFiles, nil
 }
 
@@ -475,6 +502,15 @@ func (c *CLI) getListRDSInstances() ([]string, error) {
 		instances[i] = *instance.DBInstanceIdentifier
 	}
 	return instances, nil
+}
+
+func (c *CLI) waitFor(d time.Duration) {
+	select {
+	case <-c.Abort:
+		return
+	case <-time.After(d):
+		return
+	}
 }
 
 // Nower interface abstracts time for testing

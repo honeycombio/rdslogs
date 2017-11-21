@@ -10,6 +10,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/Sirupsen/logrus"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
@@ -38,6 +39,7 @@ func main() {
 		fmt.Fprintf(os.Stderr, "Cleaning up...\n")
 		select {
 		case abort <- true:
+			close(abort)
 		case <-time.After(10 * time.Second):
 			fmt.Fprintf(os.Stderr, "Taking too long... Aborting.\n")
 			os.Exit(1)
@@ -50,6 +52,10 @@ func main() {
 			Region: aws.String(options.Region),
 		}),
 		Abort: abort,
+	}
+
+	if options.Debug {
+		logrus.SetLevel(logrus.DebugLevel)
 	}
 
 	// if sending output to Honeycomb, make sure we have a write key and dataset
@@ -140,6 +146,18 @@ func parseFlags() (*cli.Options, error) {
 			}
 			return nil, err
 		}
+	}
+
+	if options.DBType == "mysql" {
+		if options.LogFile == "" {
+			options.LogFile = "slowquery/mysql-slowquery.log"
+		}
+	} else if options.DBType == "postgresql" {
+		if options.LogFile == "" {
+			options.LogFile = "error/postgresql.log"
+		}
+	} else {
+		return nil, fmt.Errorf("Unknown dbtype value `%s`", options.DBType)
 	}
 	return &options, nil
 }
