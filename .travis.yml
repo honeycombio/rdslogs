@@ -11,6 +11,7 @@ go:
 before_install:
   - sudo apt-get -qq update
   - sudo apt-get install -y build-essential rpm
+  - sudo apt-get -y -o Dpkg::Options::="--force-confnew" install docker-ce
   - gem install fpm
 
 script:
@@ -23,6 +24,10 @@ after_success:
   - $GOPATH/bin/rdslogs --write_default_config > ./rdslogs.conf
   - ./build-pkg.sh -v "1.${TRAVIS_BUILD_NUMBER}" -t deb
   - ./build-pkg.sh -v "1.${TRAVIS_BUILD_NUMBER}" -t rpm
+  - docker login -u "$DOCKER_USERNAME" -p "$DOCKER_PASSWORD"
+  - docker build -t "honeycombio/rdslogs:1.${TRAVIS_BUILD_NUMBER}" .
+  - docker push "honeycombio/rdslogs:1.${TRAVIS_BUILD_NUMBER}"
+
 
 addons:
     artifacts:
