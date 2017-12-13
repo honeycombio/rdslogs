@@ -4,6 +4,7 @@ os:
 language: go
 
 dist: trusty
+group: deprecated-2017Q4
 
 go:
   - 1.9
