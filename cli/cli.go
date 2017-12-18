@@ -45,7 +45,7 @@ type Options struct {
 	APIHost            string            `long:"api_host" description:"Hostname for the Honeycomb API server" default:"https://api.honeycomb.io/"`
 	ScrubQuery         bool              `long:"scrub_query" description:"Replaces the query field with a one-way hash of the contents"`
 	SampleRate         int               `long:"sample_rate" description:"Only send 1 / N log lines" default:"1"`
-	ExtraFields        map[string]string `short:"e" long:"extra-field" description:"Extra fields to send in request, in the style of \"field:value\""`
+	AddFields          map[string]string `short:"a" long:"add_field" description:"Extra fields to send in request, in the style of \"field:value\""`
 
 	Version            bool   `short:"v" long:"version" description:"Output the current version and exit"`
 	ConfigFile         string `short:"c" long:"config" description:"config file" no-ini:"true"`
@@ -114,13 +114,13 @@ func (c *CLI) Stream() error {
 		}
 
 		pub := &publisher.HoneycombPublisher{
-			Writekey:    c.Options.WriteKey,
-			Dataset:     c.Options.Dataset,
-			APIHost:     c.Options.APIHost,
-			ScrubQuery:  c.Options.ScrubQuery,
-			SampleRate:  c.Options.SampleRate,
-			ExtraFields: c.Options.ExtraFields,
-			Parser:      parser,
+			Writekey:   c.Options.WriteKey,
+			Dataset:    c.Options.Dataset,
+			APIHost:    c.Options.APIHost,
+			ScrubQuery: c.Options.ScrubQuery,
+			SampleRate: c.Options.SampleRate,
+			AddFields:  c.Options.AddFields,
+			Parser:     parser,
 		}
 		defer pub.Close()
 		c.output = pub

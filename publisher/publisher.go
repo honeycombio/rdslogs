@@ -29,7 +29,7 @@ type HoneycombPublisher struct {
 	ScrubQuery   bool
 	SampleRate   int
 	Parser       parsers.Parser
-	ExtraFields  map[string]string
+	AddFields    map[string]string
 	initialized  bool
 	lines        chan string
 	eventsToSend chan event.Event
@@ -67,10 +67,10 @@ func (h *HoneycombPublisher) Write(chunk string) {
 
 				// add extra fields first so they don't override anything parsed
 				// in the log file
-				if err := libhEv.Add(h.ExtraFields); err != nil {
+				if err := libhEv.Add(h.AddFields); err != nil {
 					logrus.WithFields(logrus.Fields{
-						"extra_fields": h.ExtraFields,
-						"error":        err,
+						"add_fields": h.AddFields,
+						"error":      err,
 					}).Error("Unexpected error adding extra fields data to libhoney event")
 				}
 
