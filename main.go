@@ -113,12 +113,12 @@ func parseFlags() (*cli.Options, error) {
 
 	// parse flags and check for extra command line args
 	if extraArgs, err := flagParser.Parse(); err != nil || len(extraArgs) != 0 {
-		if err.(*flag.Error).Type == flag.ErrHelp {
-			// user specified --help
-			os.Exit(0)
-		}
-		fmt.Fprintln(os.Stderr, "Failed to parse the command line. Run with --help for more info")
 		if err != nil {
+			if err.(*flag.Error).Type == flag.ErrHelp {
+				// user specified --help
+				os.Exit(0)
+			}
+			fmt.Fprintln(os.Stderr, "Failed to parse the command line. Run with --help for more info")
 			return nil, err
 		}
 		return nil, fmt.Errorf("Unexpected extra arguments: %s\n", strings.Join(extraArgs, " "))
