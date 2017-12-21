@@ -27,8 +27,11 @@ after_success:
   - ./build-pkg.sh -v "1.${TRAVIS_BUILD_NUMBER}" -t rpm
   - docker login -u "$DOCKER_USERNAME" -p "$DOCKER_PASSWORD"
   - docker build -t "honeycombio/rdslogs:1.${TRAVIS_BUILD_NUMBER}" .
-  - if [ "$TRAVIS_PULL_REQUEST" == "false" ] && [ "$TRAVIS_BRANCH" == "master" ]; then docker tag "honeycombio/rdslogs:1.${TRAVIS_BUILD_NUMBER}" honeycomb.io/rdslogs:latest; fi
   - docker push honeycombio/rdslogs
+  - if [ "$TRAVIS_PULL_REQUEST" == "false" ] && [ "$TRAVIS_BRANCH" == "master" ]; then
+    docker tag "honeycombio/rdslogs:1.${TRAVIS_BUILD_NUMBER}" honeycombio/rdslogs:latest;
+    docker push honeycombio/rdslogs:latest;
+    fi
 
 
 addons:
