@@ -1,0 +1,72 @@
+---
+apiVersion: apps/v1 # for versions before 1.9.0 use apps/v1beta2
+kind: Deployment
+metadata:
+  name: honeycomb-rdslogs
+spec:
+  selector:
+    matchLabels:
+      app: rdslogs
+  # RDSLogs should run as a singleton.
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: rdslogs
+    spec:
+      containers:
+      - name: honeycomb-rdslogs
+        image: honeycombio/rdslogs:latest
+        command: ["/rdslogs"]
+        args:
+          - --region=us-east-1
+          # set this to your RDS instance name
+          - --identifier=CHANGME
+          - --writekey=$(WRITE_KEY)
+          - --dataset=rds
+          - --output=honeycomb
+        resources:
+          requests:
+            # Depending on your sample rate and your RDS workload, you may
+            # need to adjust this up or down
+            cpu: 250m
+            memory: 100Mi
+        env:
+        - name: WRITE_KEY
+          valueFrom:
+            secretKeyRef:
+              name: honeycomb-write-key
+              key: write_key
+        - name: AWS_DEFAULT_REGION
+          value: us-east-1
+        - name: AWS_ACCESS_KEY_ID
+          valueFrom:
+            secretKeyRef:
+              name: honeycomb-rdslogs-svc-user
+              key: aws_access_key_id
+        - name: AWS_SECRET_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: honeycomb-rdslogs-svc-user
+              key: aws_secret_access_key
+# The secret specs below are optional if you already have AWS and Honeycomb
+# secrets configured in k8s
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: honeycomb-rdslogs-svc-user
+type: Opaque
+data:
+  # kubernetes expects base64-encoded secrets
+  aws_access_key_id: CHANGEME
+  aws_secret_access_key: CHANGEME
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: honeycomb-write-key
+type: Opaque
+data:
+  write_key: CHANGEME
+...
