@@ -15,6 +15,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/rds"
 	"github.com/honeycombio/honeytail/parsers"
+	"github.com/honeycombio/honeytail/parsers/csv"
 	"github.com/honeycombio/honeytail/parsers/mysql"
 	"github.com/honeycombio/honeytail/parsers/postgresql"
 	"github.com/honeycombio/rdslogs/publisher"
@@ -29,11 +30,15 @@ const rdsPostgresLinePrefix = "%t:%r:%u@%d:[%p]:"
 const DBTypePostgreSQL = "postgresql"
 const DBTypeMySQL = "mysql"
 
+const LogTypeQuery = "query"
+const LogTypeAudit = "audit"
+
 // Options contains all the CLI flags
 type Options struct {
 	Region             string            `long:"region" description:"AWS region to use" default:"us-east-1"`
 	InstanceIdentifier string            `short:"i" long:"identifier" description:"RDS instance identifier"`
 	DBType             string            `long:"dbtype" description:"RDS database type. Accepted values are mysql and postgresql." default:"mysql"`
+	LogType            string            `long:"log_type" description:"Log file type. Accepted values are query and audit. Audit is currently only supported for mysql." default:"query"`
 	LogFile            string            `short:"f" long:"log_file" description:"RDS log file to retrieve"`
 	Download           bool              `short:"d" long:"download" description:"Download old logs instead of tailing the current log"`
 	DownloadDir        string            `long:"download_dir" description:"directory in to which log files are downloaded" default:"./"`
@@ -103,14 +108,23 @@ func (c *CLI) Stream() error {
 		c.output = &publisher.STDOUTPublisher{}
 	} else {
 		var parser parsers.Parser
-		if c.Options.DBType == DBTypeMySQL {
+		if c.Options.DBType == DBTypeMySQL && c.Options.LogType == LogTypeQuery {
 			parser = &mysql.Parser{}
 			parser.Init(&mysql.Options{})
+		} else if c.Options.DBType == DBTypeMySQL && c.Options.LogType == LogTypeAudit {
+			parser = &csv.Parser{}
+			parser.Init(&csv.Options{
+				Fields:          "time,hostname,user,source_addr,connection_id,query_id,event_type,database,query,error_code",
+				TimeFieldName:   "time",
+				TimeFieldFormat: "20060102 15:04:05",
+			})
 		} else if c.Options.DBType == DBTypePostgreSQL {
 			parser = &postgresql.Parser{}
 			parser.Init(&postgresql.Options{LogLinePrefix: rdsPostgresLinePrefix})
 		} else {
-			return fmt.Errorf("Unknown dbtype value `%s`", c.Options.DBType)
+			return fmt.Errorf(
+				"Unsupported (dbtype, log_type) pair (`%s`,`%s`)",
+				c.Options.DBType, c.Options.LogType)
 		}
 
 		pub := &publisher.HoneycombPublisher{
