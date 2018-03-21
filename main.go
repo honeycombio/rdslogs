@@ -148,16 +148,22 @@ func parseFlags() (*cli.Options, error) {
 		}
 	}
 
-	if options.DBType == "mysql" {
+	if options.DBType == cli.DBTypeMySQL && options.LogType == cli.LogTypeQuery {
 		if options.LogFile == "" {
 			options.LogFile = "slowquery/mysql-slowquery.log"
 		}
-	} else if options.DBType == "postgresql" {
+	} else if options.DBType == cli.DBTypeMySQL && options.LogType == cli.LogTypeAudit {
+		if options.LogFile == "" {
+			options.LogFile = "audit/server_audit.log"
+		}
+	} else if options.DBType == cli.DBTypePostgreSQL && options.LogType == cli.LogTypeQuery {
 		if options.LogFile == "" {
 			options.LogFile = "error/postgresql.log"
 		}
 	} else {
-		return nil, fmt.Errorf("Unknown dbtype value `%s`", options.DBType)
+		return nil, fmt.Errorf(
+			"Unsupported (dbtype, log_type) pair (`%s`,`%s`)",
+			options.DBType, options.LogType)
 	}
 	return &options, nil
 }
