@@ -45,9 +45,29 @@ Usage:
 rdslogs streams a log file from Amazon RDS and prints it to STDOUT or sends it
 up to Honeycomb.io.
 
+## AWS Requirements
+
 AWS credentials are required and can be provided via IAM roles, AWS shared
 config (~/.aws/config), AWS shared credentials (~/.aws/credentials), or
 the environment variables AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY.
+Below is the minimal IAM policy needed by RDSLogs.
+
+```json
+{
+    "Version": "2012-10-17",
+    "Statement": [
+    {
+        "Effect": "Allow",
+        "Action": [
+            "rds:DescribeDBInstances",
+            "rds:DescribeDBLogFiles",
+            "rds:DownloadDBLogFilePortion"
+        ],
+        "Resource": "*"
+    }
+  ]
+}
+```
 
 Passing --download triggers Download Mode, in which rdslogs will download the
 specified logs to the directory specified by --download_dir. Logs are specified
