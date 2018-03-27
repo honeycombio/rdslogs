@@ -144,6 +144,11 @@ func (c *CLI) Stream() error {
 	sPos := StreamPos{
 		logFile: LogFile{LogFileName: latestFile.LogFileName},
 	}
+	// for mysql audit logs, we always want the first logfile, which may not
+	// show up in GetLatestLogFiles if rdslogs started mid-rotation
+	if c.Options.DBType == DBTypeMySQL && c.Options.LogType == LogTypeAudit {
+		sPos.logFile.LogFileName = c.Options.LogFile
+	}
 	for {
 		// check for signal triggered exit
 		select {
@@ -176,6 +181,55 @@ func (c *CLI) Stream() error {
 			c.output.Write(*resp.LogFileData)
 		}
 		if !*resp.AdditionalDataPending || *resp.Marker == "0" {
+			if c.Options.DBType == DBTypeMySQL && c.Options.LogType == LogTypeAudit {
+				// The MariaDB audit plugin rotates based on size, not time. If no data
+				// is being returned, it may have been rotated, or maybe the db is just
+				// very quiet and nothing is being logged. We'll have to inspect
+				// the log sizes to be sure
+
+				// If the marker is already at 0 we don't have anything to do
+				if sPos.marker == "0" {
+					c.waitFor(time.Second * 5)
+					continue
+				}
+
+				newestFile, err := c.GetLatestLogFile()
+				if err != nil {
+					return err
+				}
+
+				// If the latest log file doesn't match the first log file (i.e
+				// server_audit.log.1 exists but not server_audit.log) we're in the
+				// middle of a rotation, so let's wait
+				if newestFile.LogFileName != sPos.logFile.LogFileName {
+					logrus.WithFields(logrus.Fields{
+						"expectedFile": sPos.logFile.LogFileName,
+						"newestFile":   newestFile.LogFileName,
+					}).Info("newest file is a rotated file, we appear to be mid-rotation")
+					c.waitFor(time.Second * 5)
+					continue
+				}
+
+				// ok there's a server_audit.log file out there
+				// check the current position of the last read (this appears to be in bytes)
+				splitMarker := strings.Split(sPos.marker, ":")
+				if len(splitMarker) != 2 {
+					// something's wrong. marker should have been #:#
+					return fmt.Errorf("marker didn't split into two pieces across a colon")
+				}
+				offset, _ := strconv.Atoi(splitMarker[1])
+
+				// if our last position is greater in size than the current file
+				// a rotation has probably occurred and we can reset the marker
+				if int64(offset) > newestFile.Size {
+					logrus.WithFields(logrus.Fields{
+						"currentOffset": offset,
+						"newFileSize":   newestFile.Size,
+					}).Debug("last marker offset exceeds newest file size, resetting marker to 0")
+					sPos.marker = "0"
+					continue
+				}
+			}
 
 			if c.Options.DBType == DBTypePostgreSQL {
 				// If that's all we've got for now, see if there's a newer file to
@@ -215,11 +269,14 @@ func (c *CLI) getNextMarker(sPos StreamPos, resp *rds.DownloadDBLogFilePortionOu
 	// if resp is nil, we're up a creek and should return sPos' marker, but at
 	// least we shouldn't try and dereference it and panic.
 	if resp == nil {
+		logrus.Warn("resp was nil, returning previous marker")
 		return sPos.marker
 	}
 	if resp.Marker == nil {
+		logrus.Warn("resp marker is nil, returning previous marker")
 		return sPos.marker
 	}
+
 	// when we get to the end of a log segment, the marker in resp is "0".
 	// if it's not "0", we should trust it's correct and use it.
 	if *resp.Marker != "0" {
@@ -247,8 +304,14 @@ func (c *CLI) getNextMarker(sPos StreamPos, resp *rds.DownloadDBLogFilePortionOu
 	}
 	curMin, _ := strconv.Atoi(now.Format("04"))
 	if curMin > 5 {
+		logrus.WithField("newMarker", *resp.Marker).
+			Debugf("no log data received but it's %d minutes (> 5) past " +
+				"the hour, returning resp marker")
 		return *resp.Marker
 	}
+	logrus.WithField("prevMarker", sPos.marker).
+		Debugf("no log data received but it's %d minutes (< 5) past " +
+			"the hour, returning previous marker")
 	// let's try again from where we did the last time.
 	return sPos.marker
 }
