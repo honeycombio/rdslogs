@@ -84,23 +84,30 @@ honeycomb output.
 Application Options:
       --region=               AWS region to use (default: us-east-1)
   -i, --identifier=           RDS instance identifier
-  -f, --log_file=             RDS log file to retrieve (default: slowquery/mysql-slowquery.log)
+      --dbtype=               RDS database type. Accepted values are mysql and postgresql.
+                              (default: mysql)
+      --log_type=             Log file type. Accepted values are query and audit. Audit is
+                              currently only supported for mysql. (default: query)
+  -f, --log_file=             RDS log file to retrieve
   -d, --download              Download old logs instead of tailing the current log
       --download_dir=         directory in to which log files are downloaded (default: ./)
-      --num_lines=            number of lines to request at a time from AWS. Larger number will be more efficient, smaller number will allow for
-                              longer lines (default: 1000)
+      --num_lines=            number of lines to request at a time from AWS. Larger number will
+                              be more efficient, smaller number will allow for longer lines
+                              (default: 10000)
       --backoff_timer=        how many seconds to pause when rate limited by AWS. (default: 5)
   -o, --output=               output for the logs: stdout or honeycomb (default: stdout)
       --writekey=             Team write key, when output is honeycomb
       --dataset=              Name of the dataset, when output is honeycomb
-      --api_host=             Hostname for the Honeycomb API server (default: https://api.honeycomb.io/)
+      --api_host=             Hostname for the Honeycomb API server (default:
+                              https://api.honeycomb.io/)
       --scrub_query           Replaces the query field with a one-way hash of the contents
       --sample_rate=          Only send 1 / N log lines (default: 1)
+  -a, --add_field=            Extra fields to send in request, in the style of "field:value"
   -v, --version               Output the current version and exit
-      --config=               config file
+  -c, --config=               config file
       --write_default_config  Write a default config file to STDOUT
       --debug                 turn on debugging output
 
 Help Options:
-  -h, --help          Show this help message
+  -h, --help                  Show this help message
 ```
