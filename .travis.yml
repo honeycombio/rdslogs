@@ -25,7 +25,7 @@ after_success:
   - $GOPATH/bin/rdslogs --write_default_config > ./rdslogs.conf
   - ./build-pkg.sh -v "1.${TRAVIS_BUILD_NUMBER}" -t deb
   - ./build-pkg.sh -v "1.${TRAVIS_BUILD_NUMBER}" -t rpm
-  - docker login -u "$DOCKER_USERNAME" -p "$DOCKER_PASSWORD"
+  - echo -n "${DOCKER_PASSWORD}" | docker login -u "${DOCKER_USERNAME}" --password-stdin
   - docker build -t "honeycombio/rdslogs:1.${TRAVIS_BUILD_NUMBER}" .
   - docker push honeycombio/rdslogs
   - if [ "$TRAVIS_PULL_REQUEST" == "false" ] && [ "$TRAVIS_BRANCH" == "master" ]; then
