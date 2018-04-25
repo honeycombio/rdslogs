@@ -180,19 +180,29 @@ func (c *CLI) Stream() error {
 		if resp.LogFileData != nil {
 			c.output.Write(*resp.LogFileData)
 		}
-		if !*resp.AdditionalDataPending || *resp.Marker == "0" {
-			if c.Options.DBType == DBTypeMySQL && c.Options.LogType == LogTypeAudit {
-				// The MariaDB audit plugin rotates based on size, not time. If no data
-				// is being returned, it may have been rotated, or maybe the db is just
-				// very quiet and nothing is being logged. We'll have to inspect
-				// the log sizes to be sure
+		if c.Options.DBType == DBTypeMySQL && c.Options.LogType == LogTypeAudit {
+			// The MariaDB audit plugin rotates based on size, not time. If no data
+			// is being returned, it may have been rotated, or maybe the db is just
+			// very quiet and nothing is being logged. We'll have to inspect
+			// the log sizes to be sure
 
-				// If the marker is already at 0 we don't have anything to do
-				if sPos.marker == "0" {
-					c.waitFor(time.Second * 5)
-					continue
-				}
+			// If we reset our marker, asked for logs, and got an empty marker back,
+			// we don't have anything to do but wait
+			if sPos.marker == "0" && *resp.Marker == "" {
+				c.waitFor(time.Second * 5)
+				continue
+			}
 
+			// Two scenarios can occur during log rotation, depending on timing
+			// - the file doesn't exist because rotation is ongoing, in which case
+			// AdditionalDataPending will be false, marker will be "", and LogFileData will be nil
+			// - the file exists but it's been rotated, meaning our marker is wrong and doesn't point
+			// at a valid position - in this case, RDS will return the marker back to us with ""
+			// for logfile data
+			// In either scenario, we need to check for a new file. When we're sure there's a new file,
+			// reset the marker
+			if (sPos.marker == *resp.Marker && resp.LogFileData != nil) ||
+				!*resp.AdditionalDataPending && resp.LogFileData == nil {
 				newestFile, err := c.GetLatestLogFile()
 				if err != nil {
 					return err
@@ -215,7 +225,9 @@ func (c *CLI) Stream() error {
 				splitMarker := strings.Split(sPos.marker, ":")
 				if len(splitMarker) != 2 {
 					// something's wrong. marker should have been #:#
-					return fmt.Errorf("marker didn't split into two pieces across a colon")
+					logrus.WithField("marker", sPos.marker).
+						Warn("marker didn't split into two pieces across a colon")
+					continue
 				}
 				offset, _ := strconv.Atoi(splitMarker[1])
 
@@ -230,7 +242,9 @@ func (c *CLI) Stream() error {
 					continue
 				}
 			}
+		}
 
+		if !*resp.AdditionalDataPending || *resp.Marker == "0" {
 			if c.Options.DBType == DBTypePostgreSQL {
 				// If that's all we've got for now, see if there's a newer file to
 				// start tailing. This logic is only relevant for postgres: the
@@ -288,7 +302,8 @@ func (c *CLI) getNextMarker(sPos StreamPos, resp *rds.DownloadDBLogFilePortionOu
 	if resp.LogFileData != nil && len(*resp.LogFileData) != 0 {
 		newMarkerStr, err := sPos.Add(len(*resp.LogFileData))
 		if err != nil {
-			fmt.Printf("failed to get next marker. Reverting to no marker. %s\n", err)
+			logrus.WithError(err).
+				Warn("failed to get next marker. Reverting to no marker. %s\n")
 			return "0"
 		}
 		return newMarkerStr
