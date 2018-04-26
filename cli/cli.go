@@ -188,7 +188,7 @@ func (c *CLI) Stream() error {
 
 			// If we reset our marker, asked for logs, and got an empty marker back,
 			// we don't have anything to do but wait
-			if sPos.marker == "0" && *resp.Marker == "" {
+			if sPos.marker == "0" && (resp.Marker != nil && *resp.Marker == "") {
 				c.waitFor(time.Second * 5)
 				continue
 			}
@@ -201,7 +201,7 @@ func (c *CLI) Stream() error {
 			// for logfile data
 			// In either scenario, we need to check for a new file. When we're sure there's a new file,
 			// reset the marker
-			if (sPos.marker == *resp.Marker && resp.LogFileData != nil) ||
+			if (resp.Marker != nil && resp.LogFileData != nil && sPos.marker == *resp.Marker) ||
 				!*resp.AdditionalDataPending && resp.LogFileData == nil {
 				newestFile, err := c.GetLatestLogFile()
 				if err != nil {
@@ -244,7 +244,7 @@ func (c *CLI) Stream() error {
 			}
 		}
 
-		if !*resp.AdditionalDataPending || *resp.Marker == "0" {
+		if !*resp.AdditionalDataPending || (resp.Marker != nil && *resp.Marker == "0") {
 			if c.Options.DBType == DBTypePostgreSQL {
 				// If that's all we've got for now, see if there's a newer file to
 				// start tailing. This logic is only relevant for postgres: the
