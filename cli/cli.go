@@ -175,6 +175,12 @@ func (c *CLI) Stream() error {
 				sPos.marker = newMarker
 				continue
 			}
+			if strings.HasPrefix(err.Error(), "DBLogFileNotFoundFault") {
+				logrus.WithError(err).
+					Warn("log does not appear to exist (rotation ongoing?) - waiting and retrying")
+				c.waitFor(time.Second * 5)
+				continue
+			}
 			return err
 		}
 		if resp.LogFileData != nil {
