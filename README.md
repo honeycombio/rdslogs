@@ -25,7 +25,7 @@ rdslogs --region us-east-1 --identifier my-rds-database --output honeycomb --wri
 
 # Installation
 
-`rdslogs` is available as a `.deb` or `.rpm` package from [`honeycombio`]hq];
+`rdslogs` is available as a `.deb` or `.rpm` package from [`honeycombio`][hq];
 see the [MySQL RDS][mysql-rds-download] or [PostgreSQL RDS][pg-rds-download]
 integration documentation for links and command line instructions.
 
