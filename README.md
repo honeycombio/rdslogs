@@ -10,7 +10,8 @@ The default action of `rdslogs` is to stream the current log file. Use the
 `--download` flag to download log files instead.
 
 The default output is STDOUT to see what's happening:
-```
+
+```sh
 rdslogs --region us-east-1 --identifier my-rds-database
 ```
 
@@ -18,13 +19,19 @@ To output the results directly to Honeycomb, use the `--output honeycomb` flag
 and include the `--writekey` and `--dataset` flags.  Optionally, the
 `--sample_rate` flag will only send a portion of your traffic to Honeycomb.
 
-```
+```sh
 rdslogs --region us-east-1 --identifier my-rds-database --output honeycomb --writekey abcabc123123 --dataset "rds logs"
 ```
 
 # Installation
 
-rdslogs is available as a .deb or .rpm package from https://honeycomb.io.
+`rdslogs` is available as a `.deb` or `.rpm` package from [`honeycombio`]hq];
+see the [MySQL RDS][mysql-rds-download] or [PostgreSQL RDS][pg-rds-download]
+integration documentation for links and command line instructions.
+
+[hq]: https://honeycomb.io
+[mysql-rds-download]: https://honeycomb.io/docs/getting-data-in/integrations/databases/mysql/rds/#download-the-rds-connector-rdslogs
+[pg-rds-download]: https://honeycomb.io/docs/getting-data-in/integrations/databases/postgresql/rds/#download-the-rds-connector-rdslogs
 
 When installed from a package, there is a config file at
 `/etc/rdslogs/rdslogs.conf`. Instead of using the command line flags as
@@ -33,23 +40,27 @@ values.  After doing so, start the service with the standard `sudo initctl start
 rdslogs` (upstart) or `sudo systemctl start rdslogs` (systemd) commands.
 
 To build and install directly from source:
-```
+
+```sh
 go get github.com/honeycombio/rdslogs
 ```
 
 # Usage
-➜  ./rdslogs --help
+
+```nil
+$ rdslogs --help
 Usage:
   rdslogs rdslogs --identifier my-rds-instance
 
 rdslogs streams a log file from Amazon RDS and prints it to STDOUT or sends it
 up to Honeycomb.io.
+```
 
 ## AWS Requirements
 
 AWS credentials are required and can be provided via IAM roles, AWS shared
-config (~/.aws/config), AWS shared credentials (~/.aws/credentials), or
-the environment variables AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY.
+config (`~/.aws/config`), AWS shared credentials (`~/.aws/credentials`), or
+the environment variables `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY`.
 Below is the minimal IAM policy needed by RDSLogs.
 
 ```json
@@ -69,18 +80,18 @@ Below is the minimal IAM policy needed by RDSLogs.
 }
 ```
 
-Passing --download triggers Download Mode, in which rdslogs will download the
-specified logs to the directory specified by --download_dir. Logs are specified
-via the --log_file flag, which names an active log file as well as the past 24
-hours of rotated logs. (For example, specifying --log_file=foo.log will download
-foo.log as well as foo.log.0, foo.log.2, ... foo.log.23.)
+Passing `--download` triggers Download Mode, in which `rdslogs` will download the
+specified logs to the directory specified by `--download_dir`. Logs are specified
+via the `--log_file` flag, which names an active log file as well as the past 24
+hours of rotated logs. (For example, specifying `--log_file=foo.log` will download
+`foo.log` as well as `foo.log.0`, `foo.log.2`, ... `foo.log.23`.)
 
-When --output is set to "honeycomb", the --writekey and --dataset flags are
+When `--output` is set to `honeycomb`, the `--writekey` and `--dataset` flags are
 required. Instead of being printed to STDOUT, database events from the log will
-be transmitted to Honeycomb. --scrub_query and --sample_rate also only apply to
-honeycomb output.
+be transmitted to Honeycomb. `--scrub_query` and `--sample_rate` also only apply to
+Honeycomb output.
 
-```
+```nil
 Application Options:
       --region=               AWS region to use (default: us-east-1)
   -i, --identifier=           RDS instance identifier
