@@ -23,6 +23,12 @@ and include the `--writekey` and `--dataset` flags.  Optionally, the
 rdslogs --region us-east-1 --identifier my-rds-database --output honeycomb --writekey abcabc123123 --dataset "rds logs"
 ```
 
+## Deprecation Notice for MySQL, MariaDB, and Aurora
+
+`rdslogs` is deprecated for MySQL, MariaDB, and Aurora: please use Cloudwatch Logs combined with our [Agentless Integrations for AWS](https://github.com/honeycombio/agentless-integrations-for-aws#mysql-rds-integration-for-cloudwatch-logs).
+
+`rdslogs` relies on the RDS API to tail mysql logs in realtime. Due to a bug in the API, slow query logs can randomly "disappear" for long periods of time, leaving large gaps in your MySQL Dataset. Amazon has acknowledged the bug, but has no ETA, so we have deprecated this tool in favor of Cloudwatch Logs, which are more reliable.
+
 # Installation
 
 `rdslogs` is available as a `.deb` or `.rpm` package from [`honeycombio`][hq];
