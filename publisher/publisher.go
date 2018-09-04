@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/Sirupsen/logrus"
 	"github.com/honeycombio/honeytail/event"
@@ -23,16 +24,18 @@ type Publisher interface {
 // HoneycombPublisher implements Publisher and sends the entries provided to
 // Honeycomb
 type HoneycombPublisher struct {
-	Writekey     string
-	Dataset      string
-	APIHost      string
-	ScrubQuery   bool
-	SampleRate   int
-	Parser       parsers.Parser
-	AddFields    map[string]string
-	initialized  bool
-	lines        chan string
-	eventsToSend chan event.Event
+	Writekey       string
+	Dataset        string
+	APIHost        string
+	ScrubQuery     bool
+	SampleRate     int
+	Parser         parsers.Parser
+	AddFields      map[string]string
+	initialized    bool
+	lines          chan string
+	eventsToSend   chan event.Event
+	eventsSent     uint
+	lastUpdateTime time.Time
 }
 
 func (h *HoneycombPublisher) Write(chunk string) {
@@ -80,6 +83,18 @@ func (h *HoneycombPublisher) Write(chunk string) {
 						"error": err,
 					}).Error("Unexpected error adding data to libhoney event")
 				}
+
+				// periodically provide updates to indicate work is actually being done
+				if time.Since(h.lastUpdateTime) >= time.Minute {
+					logrus.WithFields(logrus.Fields{
+						"most_recent_event":        ev,
+						"events_since_last_update": h.eventsSent,
+						"last_update_time":         h.lastUpdateTime,
+					}).Info("status update")
+					h.eventsSent = 0
+					h.lastUpdateTime = time.Now()
+				}
+
 				// sampling is handled by the mysql parser
 				// TODO make this work for postgres too
 				if err := libhEv.SendPresampled(); err != nil {
@@ -89,6 +104,7 @@ func (h *HoneycombPublisher) Write(chunk string) {
 					}).Error("Unexpected error event to libhoney send")
 				}
 
+				h.eventsSent++
 			}
 		}()
 	}
