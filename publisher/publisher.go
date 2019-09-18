@@ -14,6 +14,10 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+// We fetch up to 10k lines at a time - buffering several fetches at once
+// allows us to hand them off and fetch more while the line processor is doing work.
+const lineChanSize = 100000
+
 // Publisher is an interface to write rdslogs entries to a target. Current
 // implementations are STDOUT and Honeycomb
 type Publisher interface {
@@ -48,7 +52,7 @@ func (h *HoneycombPublisher) Write(chunk string) {
 			APIHost:    h.APIHost,
 			SampleRate: uint(h.SampleRate),
 		})
-		h.lines = make(chan string)
+		h.lines = make(chan string, lineChanSize)
 		h.eventsToSend = make(chan event.Event)
 		go func() {
 			h.Parser.ProcessLines(h.lines, h.eventsToSend, nil)
