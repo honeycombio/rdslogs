@@ -11,7 +11,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Sirupsen/logrus"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/rds"
 	"github.com/honeycombio/honeytail/parsers"
@@ -19,6 +18,7 @@ import (
 	"github.com/honeycombio/honeytail/parsers/mysql"
 	"github.com/honeycombio/honeytail/parsers/postgresql"
 	"github.com/honeycombio/rdslogs/publisher"
+	"github.com/sirupsen/logrus"
 )
 
 // Fortunately for us, the RDS team has diligently ignored requests to make
