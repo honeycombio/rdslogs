@@ -51,6 +51,7 @@ type Options struct {
 	ScrubQuery         bool              `long:"scrub_query" description:"Replaces the query field with a one-way hash of the contents"`
 	SampleRate         int               `long:"sample_rate" description:"Only send 1 / N log lines" default:"1"`
 	AddFields          map[string]string `short:"a" long:"add_field" description:"Extra fields to send in request, in the style of \"field:value\""`
+	NumParsers         int               `long:"num_parsers" default:"4" description:"Number of parsers to spin up. Currently only supported for the mysql parser."`
 
 	Version            bool   `short:"v" long:"version" description:"Output the current version and exit"`
 	ConfigFile         string `short:"c" long:"config" description:"config file" no-ini:"true"`
@@ -110,11 +111,12 @@ func (c *CLI) Stream() error {
 		var parser parsers.Parser
 		if c.Options.DBType == DBTypeMySQL && c.Options.LogType == LogTypeQuery {
 			parser = &mysql.Parser{}
-			parser.Init(&mysql.Options{})
+			parser.Init(&mysql.Options{NumParsers: c.Options.NumParsers})
 		} else if c.Options.DBType == DBTypeMySQL && c.Options.LogType == LogTypeAudit {
 			parser = &csv.Parser{}
 			parser.Init(&csv.Options{
 				Fields:          "time,hostname,user,source_addr,connection_id,query_id,event_type,database,query,error_code",
+				NumParsers:      c.Options.NumParsers,
 				TimeFieldName:   "time",
 				TimeFieldFormat: "20060102 15:04:05",
 			})
@@ -243,7 +245,7 @@ func (c *CLI) Stream() error {
 					logrus.WithFields(logrus.Fields{
 						"currentOffset": offset,
 						"newFileSize":   newestFile.Size,
-					}).Debug("last marker offset exceeds newest file size, resetting marker to 0")
+					}).Info("last marker offset exceeds newest file size, resetting marker to 0")
 					sPos.marker = "0"
 					continue
 				}
@@ -266,7 +268,7 @@ func (c *CLI) Stream() error {
 				if newestFile.LogFileName != sPos.logFile.LogFileName {
 					logrus.WithFields(logrus.Fields{
 						"oldFile": sPos.logFile.LogFileName,
-						"newFile": newestFile.LogFileName}).Debug("Found newer file")
+						"newFile": newestFile.LogFileName}).Info("Found newer file")
 					sPos = StreamPos{logFile: LogFile{LogFileName: newestFile.LogFileName}}
 					continue
 				}
@@ -278,7 +280,7 @@ func (c *CLI) Stream() error {
 		logrus.WithFields(logrus.Fields{
 			"prevMarker": sPos.marker,
 			"newMarker":  newMarker,
-			"file":       sPos.logFile.LogFileName}).Debug("Got new marker")
+			"file":       sPos.logFile.LogFileName}).Info("Got new marker")
 		sPos.marker = newMarker
 	}
 }
@@ -326,12 +328,12 @@ func (c *CLI) getNextMarker(sPos StreamPos, resp *rds.DownloadDBLogFilePortionOu
 	curMin, _ := strconv.Atoi(now.Format("04"))
 	if curMin > 5 {
 		logrus.WithField("newMarker", *resp.Marker).
-			Debugf("no log data received but it's %d minutes (> 5) past "+
+			Infof("no log data received but it's %d minutes (> 5) past "+
 				"the hour, returning resp marker", curMin)
 		return *resp.Marker
 	}
 	logrus.WithField("prevMarker", sPos.marker).
-		Debugf("no log data received but it's %d minutes (< 5) past "+
+		Infof("no log data received but it's %d minutes (< 5) past "+
 			"the hour, returning previous marker", curMin)
 	// let's try again from where we did the last time.
 	return sPos.marker
