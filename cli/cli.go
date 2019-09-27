@@ -326,13 +326,13 @@ func (c *CLI) getNextMarker(sPos StreamPos, resp *rds.DownloadDBLogFilePortionOu
 	curMin, _ := strconv.Atoi(now.Format("04"))
 	if curMin > 5 {
 		logrus.WithField("newMarker", *resp.Marker).
-			Debug("no log data received but it's %d minutes (> 5) past " +
-				"the hour, returning resp marker")
+			Debugf("no log data received but it's %d minutes (> 5) past "+
+				"the hour, returning resp marker", curMin)
 		return *resp.Marker
 	}
 	logrus.WithField("prevMarker", sPos.marker).
-		Debug("no log data received but it's %d minutes (< 5) past " +
-			"the hour, returning previous marker")
+		Debugf("no log data received but it's %d minutes (< 5) past "+
+			"the hour, returning previous marker", curMin)
 	// let's try again from where we did the last time.
 	return sPos.marker
 }
