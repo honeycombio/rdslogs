@@ -8,10 +8,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Sirupsen/logrus"
 	"github.com/honeycombio/honeytail/event"
 	"github.com/honeycombio/honeytail/parsers"
 	"github.com/honeycombio/libhoney-go"
+	"github.com/sirupsen/logrus"
 )
 
 // Publisher is an interface to write rdslogs entries to a target. Current
