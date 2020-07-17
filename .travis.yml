@@ -30,7 +30,7 @@ after_success:
   - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then docker build -t "honeycombio/rdslogs:1.${TRAVIS_BUILD_NUMBER}" .; fi
   - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then docker push honeycombio/rdslogs; fi
   - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then
-      if [ "$TRAVIS_PULL_REQUEST" == "false" ] && [ "$TRAVIS_BRANCH" == "master" ]; then
+      if [ "$TRAVIS_PULL_REQUEST" == "false" ] && [ "$TRAVIS_BRANCH" == "main" ]; then
         docker tag "honeycombio/rdslogs:1.${TRAVIS_BUILD_NUMBER}" honeycombio/rdslogs:latest;
         docker push honeycombio/rdslogs:latest;
       fi
