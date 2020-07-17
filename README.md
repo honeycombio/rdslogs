@@ -1,5 +1,5 @@
 # RDSLogs
-[![Build Status](https://travis-ci.org/honeycombio/rdslogs.svg?branch=master)](https://travis-ci.org/honeycombio/rdslogs)
+[![Build Status](https://travis-ci.org/honeycombio/rdslogs.svg?branch=main)](https://travis-ci.org/honeycombio/rdslogs)
 
 `rdslogs` is a tool to download or stream log files from RDS. When streaming, you
 can choose to stream them to STDOUT or directly to Honeycomb.
