@@ -12,6 +12,7 @@ import (
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
+	"github.com/aws/aws-sdk-go/aws/credentials/stscreds"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/rds"
 	flag "github.com/jessevdk/go-flags"
@@ -23,6 +24,7 @@ import (
 
 // BuildID is set by Travis CI
 var BuildID string
+var creds *credentials.Credentials
 
 func main() {
 	options, err := parseFlags()
@@ -46,10 +48,21 @@ func main() {
 		}
 	}()
 
+	if options.AssumeRoleArn != "" {
+		sess := session.Must(session.NewSession())
+		creds := stscreds.NewCredentials(sess, options.AssumeRoleArn, func(p *stscreds.AssumeRoleProvider) {
+			if options.ExternalID != "" {
+				p.ExternalID = aws.String(options.ExternalID)
+			}
+		})
+		_ = creds
+	}
+
 	c := &cli.CLI{
 		Options: options,
 		RDS: rds.New(session.New(), &aws.Config{
-			Region: aws.String(options.Region),
+			Region:      aws.String(options.Region),
+			Credentials: creds,
 		}),
 		Abort: abort,
 	}

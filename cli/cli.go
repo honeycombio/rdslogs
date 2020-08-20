@@ -52,6 +52,8 @@ type Options struct {
 	SampleRate         int               `long:"sample_rate" description:"Only send 1 / N log lines" default:"1"`
 	AddFields          map[string]string `short:"a" long:"add_field" description:"Extra fields to send in request, in the style of \"field:value\""`
 	NumParsers         int               `long:"num_parsers" default:"4" description:"Number of parsers to spin up. Currently only supported for the mysql parser."`
+	AssumeRoleArn      string            `long:"assumerolearn" description:"AWS Role to assume"`
+	ExternalID         string            `long:"externalid" description:"ExternalID for AssumeRoleArn"`
 
 	Version            bool   `short:"v" long:"version" description:"Output the current version and exit"`
 	ConfigFile         string `short:"c" long:"config" description:"config file" no-ini:"true"`
