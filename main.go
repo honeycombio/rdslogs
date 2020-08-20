@@ -49,13 +49,14 @@ func main() {
 	}()
 
 	if options.AssumeRoleArn != "" {
+		fmt.Fprintln(os.Stderr, "AssumeRoleArn set, using it")
+		fmt.Fprintln(os.Stderr, options.AssumeRoleArn)
 		sess := session.Must(session.NewSession())
-		creds := stscreds.NewCredentials(sess, options.AssumeRoleArn, func(p *stscreds.AssumeRoleProvider) {
+		creds = stscreds.NewCredentials(sess, options.AssumeRoleArn, func(p *stscreds.AssumeRoleProvider) {
 			if options.ExternalID != "" {
 				p.ExternalID = aws.String(options.ExternalID)
 			}
 		})
-		_ = creds
 	}
 
 	c := &cli.CLI{
