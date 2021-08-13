@@ -53,6 +53,8 @@ go get github.com/honeycombio/rdslogs
 
 # Usage
 
+[![OSS Lifecycle](https://img.shields.io/osslifecycle/honeycombio/REPO)](https://github.com/honeycombio/home/blob/main/honeycomb-oss-lifecycle-and-practices.md)
+
 ```nil
 $ rdslogs --help
 Usage:
