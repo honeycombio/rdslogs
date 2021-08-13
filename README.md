@@ -1,4 +1,6 @@
 # RDSLogs
+
+[![OSS Lifecycle](https://img.shields.io/osslifecycle/honeycombio/rdslogs)](https://github.com/honeycombio/home/blob/main/honeycomb-oss-lifecycle-and-practices.md)
 [![Build Status](https://travis-ci.org/honeycombio/rdslogs.svg?branch=main)](https://travis-ci.org/honeycombio/rdslogs)
 
 `rdslogs` is a tool to download or stream log files from RDS. When streaming, you
@@ -29,7 +31,7 @@ rdslogs --region us-east-1 --identifier my-rds-database --output honeycomb --wri
 
 `rdslogs` relies on the RDS API to tail mysql logs in realtime. Due to a bug in the API, slow query logs can randomly "disappear" for long periods of time, leaving large gaps in your MySQL Dataset. Amazon has acknowledged the bug, but has no ETA, so we have deprecated this tool in favor of Cloudwatch Logs, which are more reliable.
 
-# Installation
+## Installation
 
 `rdslogs` is available as a `.deb` or `.rpm` package from [`honeycombio`][hq];
 see the [MySQL RDS][mysql-rds-download] or [PostgreSQL RDS][pg-rds-download]
@@ -51,9 +53,7 @@ To build and install directly from source:
 go get github.com/honeycombio/rdslogs
 ```
 
-# Usage
-
-[![OSS Lifecycle](https://img.shields.io/osslifecycle/honeycombio/REPO)](https://github.com/honeycombio/home/blob/main/honeycomb-oss-lifecycle-and-practices.md)
+## Usage
 
 ```nil
 $ rdslogs --help
@@ -64,7 +64,7 @@ rdslogs streams a log file from Amazon RDS and prints it to STDOUT or sends it
 up to Honeycomb.io.
 ```
 
-## AWS Requirements
+### AWS Requirements
 
 AWS credentials are required and can be provided via IAM roles, AWS shared
 config (`~/.aws/config`), AWS shared credentials (`~/.aws/credentials`), or
