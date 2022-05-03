@@ -1,7 +1,19 @@
 version: 2.1
 
 orbs:
-  go: circleci/go@1.7.0
+  buildevents: honeycombio/buildevents@0.2.8
+  aws-cli: circleci/aws-cli@2.0.3
+
+executors:
+  linuxgo:
+    docker:
+      - image: cimg/go:1.18
+        environment:
+          GO111MODULE: "on"
+  pkg:
+    ## executor with ruby for installing fpm and building packages
+    docker:
+      - image: cimg/ruby:latest
 
 commands:
   go-build:
@@ -9,92 +21,175 @@ commands:
       os:
         description: Target operating system
         type: enum
-        enum: [ "linux", "darwin" ]
+        enum: ["linux", "darwin"]
         default: "linux"
       arch:
         description: Target architecture
         type: enum
-        enum: [ "amd64", "arm64" ]
+        enum: ["386", "amd64", "arm64"]
         default: "amd64"
-      dir:
-        description: Output directory
-        type: string
-        default: "~/artifacts"
     steps:
       - run: |
           GOOS=<< parameters.os >> \
           GOARCH=<< parameters.arch >> \
-          go build -ldflags "-X main.BuildID=${CIRCLE_TAG:-${CIRCLE_SHA1:0:7}}" \
-          -o << parameters.dir >>/rdslogs-<< parameters.os >>-<< parameters.arch >> \
+          CGO_ENABLED=0 \
+          buildevents cmd $CIRCLE_WORKFLOW_ID $BUILDEVENTS_SPAN_ID go_build -- \
+          go build -ldflags "-X main.BuildID=${CIRCLE_TAG}" \
+          -o $GOPATH/bin/rdslogs-<< parameters.os >>-<< parameters.arch >> \
           ./...
 
 jobs:
-  test:
-    docker:
-      - image: cimg/go:1.18
+  setup:
+    executor: linuxgo
     steps:
-      - checkout
-      - go/load-cache
-      - go/test:
-          race: true
-          verbose: true
-          covermode: atomic
-      - go/save-cache
-
-  build:
-    docker:
-      - image: cimg/go:1.18
-    steps:
-      - checkout
-      - go/load-cache
-      - run: mkdir -p ~/artifacts
-      - go-build:
-          os: linux
-          arch: amd64
-      - go-build:
-          os: linux
-          arch: arm64
-      - go-build:
-          os: darwin
-          arch: amd64
+      - buildevents/start_trace
+      - run: |
+          mkdir workspace
+          echo $(( $CIRCLE_BUILD_NUM + 1000 )) > workspace/build_id
+          cat workspace/build_id
       - persist_to_workspace:
-          root: ~/
+          root: workspace
           paths:
-            - artifacts
-      - store_artifacts:
-          path: ~/artifacts
-      - go/save-cache
-
-  publish:
-    docker:
-      - image: cibuilds/github:0.13.0
+            - build_id
+  watch:
+    executor: linuxgo
     steps:
-      - attach_workspace:
-          at: ~/
+      - buildevents/watch_build_and_finish
+
+  test:
+    executor: linuxgo
+    steps:
+      - buildevents/with_job_span:
+          steps:
+            - checkout
+            - buildevents/berun:
+                bename: go_test
+                becommand: go test -v ./...
+  build_bins:
+    executor: linuxgo
+    steps:
+      - buildevents/with_job_span:
+          steps:
+            - checkout
+            - go-build:
+                os: linux
+                arch: "386"
+            - go-build:
+                os: linux
+                arch: amd64
+            - go-build:
+                os: darwin
+                arch: amd64
+            - go-build:
+                os: linux
+                arch: arm64
+
+            - run: mkdir -v artifacts; cp -v $GOPATH/bin/rdslogs-* artifacts/
+
+            - run: echo "size=$(du -sb artifacts | cut -f 1)" >> $BASH_ENV
+            - buildevents/add_context:
+                field_name: artifacts_size_bytes
+                field_value: $size
+
+            - persist_to_workspace:
+                root: artifacts
+                paths:
+                  - rdslogs-*
+            - store_artifacts:
+                path: artifacts/
+
+  publish_github:
+    docker:
+      - image: cibuilds/github:0.12.2
+    steps:
+      - buildevents/with_job_span:
+          steps:
+            - attach_workspace:
+                at: artifacts
+            - run:
+                name: "Publish Release on GitHub"
+                command: |
+                  echo "about to publish to tag ${CIRCLE_TAG}"
+                  ls -l *
+                  ghr -draft -n ${CIRCLE_TAG} -t ${GITHUB_TOKEN} -u ${CIRCLE_PROJECT_USERNAME} -r ${CIRCLE_PROJECT_REPONAME} -c ${CIRCLE_SHA1} ${CIRCLE_TAG} ./artifacts
+
+  build_docker:
+    docker:
+      - image: cimg/go:1.18
+    steps:
+      - run: go install github.com/google/ko@latest
+      - checkout
+      - setup_remote_docker
       - run:
-          name: "Publish Release on GitHub"
+          name: build docker images and publish locally
+          command: ./build-docker.sh
+
+  publish_docker:
+    docker:
+      - image: cimg/go:1.18
+    steps:
+      - run: go install github.com/google/ko@latest
+      - checkout
+      - setup_remote_docker
+      - run:
+          name: build docker images and publish to Docker Hub
+          environment:
+            KO_DOCKER_REPO: honeycombio
           command: |
-            echo "about to publish to tag ${CIRCLE_TAG}"
-            ls -l ~/artifacts/*
-            ghr -draft -t ${GITHUB_TOKEN} -u ${CIRCLE_PROJECT_USERNAME} -r ${CIRCLE_PROJECT_REPONAME} -c ${CIRCLE_SHA1} ${CIRCLE_TAG} ~/artifacts
+            echo "${DOCKER_PASSWORD}" | docker login -u "${DOCKER_USERNAME}" --password-stdin;
+            ./build-docker.sh
 
 workflows:
   build:
     jobs:
-      - test:
+      - setup:
           filters:
             tags:
               only: /.*/
-      - build:
-          requires:
-            - test
-          filters:
-            tags:
-              only: /.*/
-      - publish:
+      - watch:
           context: Honeycomb Secrets for Public Repos
           requires:
-            - build
+            - setup
+          filters:
+            tags:
+              only: /.*/
+            branches:
+              ignore:
+                - /pull\/.*/
+                - /dependabot\/.*/
+      - test:
+          requires:
+            - setup
+          filters:
+            tags:
+              only: /.*/
+      - build_bins:
+          requires:
+            - setup
+          filters:
+            tags:
+              only: /.*/
+      - build_docker:
+          requires:
+            - setup
+          filters:
+            tags:
+              only: /.*/
+      - publish_github:
+          context: Honeycomb Secrets for Public Repos
+          requires:
+            - build_bins
+            - build_docker
+          filters:
+            tags:
+              only: /^v.*/
+            branches:
+              ignore: /.*/
+      - publish_docker:
+          context: Honeycomb Secrets for Public Repos
+          requires:
+            - build_bins
+            - build_docker
           filters:
             tags:
               only: /^v.*/
