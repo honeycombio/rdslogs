@@ -1,0 +1,102 @@
+version: 2.1
+
+orbs:
+  go: circleci/go@1.7.0
+
+commands:
+  go-build:
+    parameters:
+      os:
+        description: Target operating system
+        type: enum
+        enum: [ "linux", "darwin" ]
+        default: "linux"
+      arch:
+        description: Target architecture
+        type: enum
+        enum: [ "amd64", "arm64" ]
+        default: "amd64"
+      dir:
+        description: Output directory
+        type: string
+        default: "~/artifacts"
+    steps:
+      - run: |
+          GOOS=<< parameters.os >> \
+          GOARCH=<< parameters.arch >> \
+          go build -ldflags "-X main.BuildID=${CIRCLE_TAG:-${CIRCLE_SHA1:0:7}}" \
+          -o << parameters.dir >>/rdslogs-<< parameters.os >>-<< parameters.arch >> \
+          ./...
+
+jobs:
+  test:
+    docker:
+      - image: cimg/go:1.18
+    steps:
+      - checkout
+      - go/load-cache
+      - go/test:
+          race: true
+          verbose: true
+          covermode: atomic
+      - go/save-cache
+
+  build:
+    docker:
+      - image: cimg/go:1.18
+    steps:
+      - checkout
+      - go/load-cache
+      - run: mkdir -p ~/artifacts
+      - go-build:
+          os: linux
+          arch: amd64
+      - go-build:
+          os: linux
+          arch: arm64
+      - go-build:
+          os: darwin
+          arch: amd64
+      - persist_to_workspace:
+          root: ~/
+          paths:
+            - artifacts
+      - store_artifacts:
+          path: ~/artifacts
+      - go/save-cache
+
+  publish:
+    docker:
+      - image: cibuilds/github:0.13.0
+    steps:
+      - attach_workspace:
+          at: ~/
+      - run:
+          name: "Publish Release on GitHub"
+          command: |
+            echo "about to publish to tag ${CIRCLE_TAG}"
+            ls -l ~/artifacts/*
+            ghr -draft -t ${GITHUB_TOKEN} -u ${CIRCLE_PROJECT_USERNAME} -r ${CIRCLE_PROJECT_REPONAME} -c ${CIRCLE_SHA1} ${CIRCLE_TAG} ~/artifacts
+
+workflows:
+  build:
+    jobs:
+      - test:
+          filters:
+            tags:
+              only: /.*/
+      - build:
+          requires:
+            - test
+          filters:
+            tags:
+              only: /.*/
+      - publish:
+          context: Honeycomb Secrets for Public Repos
+          requires:
+            - build
+          filters:
+            tags:
+              only: /^v.*/
+            branches:
+              ignore: /.*/
