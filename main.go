@@ -46,9 +46,13 @@ func main() {
 		}
 	}()
 
+	session, err := session.NewSession()
+	if err != nil {
+		log.Fatal(err)
+	}
 	c := &cli.CLI{
 		Options: options,
-		RDS: rds.New(session.New(), &aws.Config{
+		RDS: rds.New(session, &aws.Config{
 			Region: aws.String(options.Region),
 		}),
 		Abort: abort,
