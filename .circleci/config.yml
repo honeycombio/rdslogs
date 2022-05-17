@@ -74,7 +74,7 @@ jobs:
       - checkout
       - run: ./build-pkg.sh -m << parameters.arch >> -v "${CIRCLE_TAG}" -t deb
       - run: ./build-pkg.sh -m << parameters.arch >> -v "${CIRCLE_TAG}" -t rpm
-      - run: echo "finished builds" && find ~/artifacts -ls
+      - run: echo "finished building packages" && find ~/packages -ls
       - persist_to_workspace:
           root: ~/
           paths:
