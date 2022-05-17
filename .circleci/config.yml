@@ -13,16 +13,13 @@ executors:
 platform_matrix: &platform_matrix
   matrix:
     parameters:
-      os: &oses ["linux", "darwin"] # <-- "windows" in the future!
+      os: &oses ["linux", "darwin"]
       arch: &arches ["amd64", "arm64", "arm", "386"]
     exclude:
       - os: darwin
         arch: arm
       - os: darwin
         arch: "386"
-    # exclude: # And when Windows comes, we'll need to exclude the Win+arm64 combo:
-    #   - os: "windows"
-    #     arch: "arm64"
 
 jobs:
   test:
@@ -58,7 +55,9 @@ jobs:
       - persist_to_workspace:
           root: ~/
           paths:
-            - artifacts
+            - binaries/rdslogs-<< parameters.os >>-<< parameters.arch >>
+      - store_artifacts:
+          path: binaries/rdslogs-<< parameters.os >>-<< parameters.arch >>
 
   ## We only have to build packages for linux, so we iterate architectures and build rpm and deb for each.
   build_packages:
@@ -79,9 +78,22 @@ jobs:
       - persist_to_workspace:
           root: ~/
           paths:
-            - artifacts
+            - packages/<< parameters.arch >>/*
       - store_artifacts:
-          path: ~/artifacts
+          path: ~/packages/<< parameters.arch >>
+
+  consolidate_artifacts:
+    docker:
+    - image: cimg/go:1.18
+    steps:
+      - attach_workspace:
+          at: ~/
+      - run: cp -R ~/binaries ~/artifacts
+      - run: find ~/packages -type f -print0 |xargs -0 -I {} cp {} ~/artifacts
+      - persist_to_workspace:
+          root: ~/
+          paths:
+            - artifacts
 
   publish_github:
     docker:
@@ -170,10 +182,16 @@ workflows:
           filters:
             tags:
               only: /.*/
+      - consolidate_artifacts:
+          requires:
+            - build_packages
+          filters:
+            tags:
+              only: /.*/
       - publish_github:
           context: Honeycomb Secrets for Public Repos
           requires:
-            - build_packages
+            - consolidate_artifacts
           filters:
             tags:
               only: /^v.*/
@@ -182,7 +200,7 @@ workflows:
       - publish_s3:
           context: Honeycomb Secrets for Public Repos
           requires:
-            - build_packages
+            - consolidate_artifacts
           filters:
             tags:
               only: /^v.*/
@@ -191,7 +209,6 @@ workflows:
       - publish_docker:
           context: Honeycomb Secrets for Public Repos
           requires:
-            - build_bins
             - build_docker
           filters:
             tags:

@@ -26,14 +26,16 @@ if [ -z "$version" ] || [ -z "$pkg_type" ] || [ -z "$arch" ]; then
     usage
 fi
 
+PACKAGE_DIR=~/packages/${arch}
+mkdir -p ${PACKAGE_DIR}
 fpm -s dir -n rdslogs \
     -m "Honeycomb <solutions@honeycomb.io>" \
-    -p ~/artifacts \
+    -p ${PACKAGE_DIR} \
     -v $version \
     -t $pkg_type \
     -a $arch \
     --pre-install=./preinstall \
-    ~/artifacts/rdslogs-linux-${arch}=/usr/bin/rdslogs \
+    ~/binaries/rdslogs-linux-${arch}=/usr/bin/rdslogs \
     ./rdslogs.upstart=/etc/init/rdslogs.conf \
     ./rdslogs.service=/lib/systemd/system/rdslogs.service \
     ./rdslogs.conf=/etc/rdslogs/rdslogs.conf \
