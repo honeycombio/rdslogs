@@ -50,7 +50,7 @@ jobs:
           GOARCH=<< parameters.arch >> \
           CGO_ENABLED=0 \
           go build -ldflags "-X main.BuildID=${CIRCLE_TAG}" \
-          -o ~/artifacts/rdslogs-<< parameters.os >>-<< parameters.arch >> \
+          -o ~/binaries/rdslogs-<< parameters.os >>-<< parameters.arch >> \
           .
       - persist_to_workspace:
           root: ~/
