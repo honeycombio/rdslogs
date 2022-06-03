@@ -1,6 +1,8 @@
 # RDSLogs
 
-[![OSS Lifecycle](https://img.shields.io/osslifecycle/honeycombio/rdslogs?color=success)](https://github.com/honeycombio/home/blob/main/honeycomb-oss-lifecycle-and-practices.md)
+[![OSS Lifecycle](https://img.shields.io/osslifecycle/honeycombio/rdslogs?color=pink)](https://github.com/honeycombio/home/blob/main/honeycomb-oss-lifecycle-and-practices.md)
+
+STATUS: this project is being sunset. See https://github.com/honeycombio/rdslogs/issues/51
 
 `rdslogs` is a tool to download or stream log files from RDS. When streaming, you
 can choose to stream them to STDOUT or directly to Honeycomb.
