@@ -1,8 +1,11 @@
 # RDSLogs
 
-[![OSS Lifecycle](https://img.shields.io/osslifecycle/honeycombio/rdslogs?color=pink)](https://github.com/honeycombio/home/blob/main/honeycomb-oss-lifecycle-and-practices.md)
+[![OSS Lifecycle](https://img.shields.io/osslifecycle/honeycombio/rdslogs)](https://github.com/honeycombio/home/blob/main/honeycomb-oss-lifecycle-and-practices.md)
 
-STATUS: this project is being sunset. See https://github.com/honeycombio/rdslogs/issues/51
+**STATUS: this project is [archived](https://github.com/honeycombio/home/blob/main/honeycomb-oss-lifecycle-and-practices.md).**
+
+Honeycomb recommends using [AWS Agentless Integrations](https://github.com/honeycombio/agentless-integrations-for-aws/#mysql--postgresql-rds-integration-for-cloudwatch-logs) to extract log data from RDS.
+
 
 `rdslogs` is a tool to download or stream log files from RDS. When streaming, you
 can choose to stream them to STDOUT or directly to Honeycomb.
